@@ -1,0 +1,18 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# SQLite database (created at runtime in DATA_DIR)
+data/
+*.db
+
+# Test coverage output
+.coverage
+htmlcov/
+
+# Local environment files
+.env
+
+# macOS
+.DS_Store
