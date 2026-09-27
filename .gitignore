@@ -16,3 +16,6 @@ htmlcov/
 
 # macOS
 .DS_Store
+
+# Editor settings (VS Code)
+.vscode/
