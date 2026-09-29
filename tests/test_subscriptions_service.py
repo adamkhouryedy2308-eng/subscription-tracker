@@ -7,9 +7,9 @@ from subscriptions import service
 TODAY = date(2026, 9, 29)
 
 
-def valid_form(**changes):
+def valid_form():
     """A form that passes validation; tests change one field at a time."""
-    form = {
+    return {
         "name": "Netflix",
         "category": "Entertainment",
         "price": "13.49",
@@ -17,8 +17,6 @@ def valid_form(**changes):
         "first_payment_date": "2026-01-15",
         "last_used_date": "2026-09-20",
     }
-    form.update(changes)
-    return form
 
 
 # --- Money -------------------------------------------------------------------
@@ -53,7 +51,9 @@ def test_valid_form_has_no_errors():
 
 
 def test_trial_checkbox_is_stored_as_1():
-    data, errors = service.validate(valid_form(is_trial="on"), TODAY)
+    form = valid_form()
+    form["is_trial"] = "on"
+    data, errors = service.validate(form, TODAY)
     assert errors == []
     assert data["is_trial"] == 1
 
@@ -71,12 +71,16 @@ def test_trial_checkbox_is_stored_as_1():
     ({"last_used_date": "not a date"}, "Last used date must be a valid date."),
 ])
 def test_invalid_input_gives_a_clear_error(changes, message):
-    _, errors = service.validate(valid_form(**changes), TODAY)
+    form = valid_form()
+    form.update(changes)
+    data, errors = service.validate(form, TODAY)
     assert message in errors
 
 
 def test_last_used_date_is_optional():
-    data, errors = service.validate(valid_form(last_used_date=""), TODAY)
+    form = valid_form()
+    form["last_used_date"] = ""
+    data, errors = service.validate(form, TODAY)
     assert errors == []
     assert data["last_used_date"] is None
 
@@ -120,15 +124,22 @@ def test_create_subscription_saves_a_valid_form(temp_db):
 
 
 def test_create_subscription_saves_nothing_when_invalid(temp_db):
-    new_id, errors = service.create_subscription(valid_form(price="abc"), TODAY)
+    form = valid_form()
+    form["price"] = "abc"
+    new_id, errors = service.create_subscription(form, TODAY)
     assert new_id is None
     assert errors
     assert service.get_active_subscriptions(TODAY) == []
 
 
 def test_get_active_subscriptions_works_out_cost_and_next_payment(temp_db):
-    service.create_subscription(valid_form(billing_cycle="yearly", price="120"), TODAY)
-    [sub] = service.get_active_subscriptions(TODAY)
+    form = valid_form()
+    form["billing_cycle"] = "yearly"
+    form["price"] = "120"
+    service.create_subscription(form, TODAY)
+    subs = service.get_active_subscriptions(TODAY)
+    assert len(subs) == 1
+    sub = subs[0]
     assert sub["name"] == "Netflix"
     assert sub["monthly_cost_cents"] == 1000
     assert sub["next_payment_date"] == date(2027, 1, 15)

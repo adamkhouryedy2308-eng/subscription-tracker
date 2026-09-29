@@ -22,7 +22,7 @@ CATEGORIES = [
 ]
 
 MAX_NAME_LENGTH = 100
-MAX_PRICE_CENTS = 1_000_000  # 10,000 euros: anything above is almost surely a typo
+MAX_PRICE_CENTS = 1000000  # 10,000 euros: anything above is almost surely a typo
 
 
 def parse_price(text):
