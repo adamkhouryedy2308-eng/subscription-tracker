@@ -7,9 +7,10 @@ __pycache__/
 data/
 *.db
 
-# Test coverage output
+# Test coverage output and pytest's cache
 .coverage
 htmlcov/
+.pytest_cache/
 
 # Local environment files
 .env
