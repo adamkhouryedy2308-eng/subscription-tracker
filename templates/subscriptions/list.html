@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+{% block title %}Subscriptions · SubTrack{% endblock %}
+
+{% block content %}
+<header class="page-head">
+  <div>
+    <h1>Subscriptions</h1>
+    <p class="subtitle">Everything you pay for regularly, in one place.</p>
+  </div>
+  <a class="button" href="{{ url_for('subscriptions.add_page') }}">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
+    Add subscription
+  </a>
+</header>
+
+{% if added %}
+<div class="notice success">
+  <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M8 12l3 3 5-6"/></svg>
+  <span><strong>{{ added }}</strong> was added to your subscriptions.</span>
+</div>
+{% endif %}
+
+{% if subscriptions %}
+<section class="stats">
+  <div class="stat stat-hero">
+    <span class="stat-label">You spend per month</span>
+    <span class="stat-value">{{ summary.monthly_total_cents | euros }}</span>
+    <span class="stat-hint">across {{ summary.count }} subscription{% if summary.count != 1 %}s{% endif %}</span>
+  </div>
+  <div class="stat">
+    <span class="stat-label">Per year</span>
+    <span class="stat-value">{{ summary.yearly_total_cents | euros }}</span>
+    <span class="stat-hint">if nothing changes</span>
+  </div>
+  <div class="stat">
+    <span class="stat-label">Next payment</span>
+    <span class="stat-value small">{{ summary.next_up.name }}</span>
+    <span class="stat-hint">
+      {{ summary.next_up.price_cents | euros }} ·
+      {% if summary.next_up.days_until_payment == 0 %}today{% elif summary.next_up.days_until_payment == 1 %}tomorrow{% else %}in {{ summary.next_up.days_until_payment }} days{% endif %}
+    </span>
+  </div>
+</section>
+
+<section class="card">
+  <div class="list-head">
+    <span>Subscription</span>
+    <span>Price</span>
+    <span>Per month</span>
+    <span>Next payment</span>
+  </div>
+
+  {% for sub in subscriptions %}
+  {% set category_class = sub.category | lower | replace(" & ", "-") | replace(" ", "-") %}
+  <div class="row cat-{{ category_class }}">
+    <div class="row-main">
+      <span class="avatar">{{ sub.name[0] | upper }}</span>
+      <div>
+        <div class="row-name">
+          {{ sub.name }}
+          {% if sub.is_trial %}<span class="badge trial">Free trial</span>{% endif %}
+        </div>
+        <span class="chip">{{ sub.category }}</span>
+      </div>
+    </div>
+    <div class="row-cell">
+      <span class="cell-label">Price</span>
+      {{ sub.price_cents | euros }}
+      <span class="muted date">billed {{ sub.billing_cycle }}</span>
+    </div>
+    <div class="row-cell strong">
+      <span class="cell-label">Per month</span>
+      {{ sub.monthly_cost_cents | euros }}
+    </div>
+    <div class="row-cell">
+      <span class="cell-label">Next payment</span>
+      <span class="when {% if sub.days_until_payment <= 3 %}soon{% endif %}">
+        {% if sub.days_until_payment == 0 %}Today{% elif sub.days_until_payment == 1 %}Tomorrow{% else %}In {{ sub.days_until_payment }} days{% endif %}
+      </span>
+      <span class="muted date">{{ sub.next_payment_date.strftime("%d %b %Y") }}</span>
+    </div>
+  </div>
+  {% endfor %}
+</section>
+
+{% else %}
+<section class="card empty">
+  <div class="empty-icon">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="5" width="20" height="14" rx="3"/><path d="M2 10h20"/><path d="M6 15h4"/></svg>
+  </div>
+  <h2>No subscriptions yet</h2>
+  <p>Add Netflix, Spotify, your gym or anything else you pay for regularly, and SubTrack will show what it really costs you.</p>
+  <a class="button" href="{{ url_for('subscriptions.add_page') }}">Add your first subscription</a>
+</section>
+{% endif %}
+{% endblock %}

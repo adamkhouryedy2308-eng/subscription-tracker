@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+{% block title %}{{ title }} · SubTrack{% endblock %}
+
+{% block content %}
+<header class="page-head">
+  <div>
+    <h1>{{ title }}</h1>
+    <p class="subtitle">It takes 20 seconds. You can change anything later.</p>
+  </div>
+</header>
+
+{% if errors %}
+<div class="notice error">
+  <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v6"/><path d="M12 16.5v.5"/></svg>
+  <div>
+    <strong>Please fix {% if errors | length == 1 %}this{% else %}these {{ errors | length }} things{% endif %}:</strong>
+    <ul>
+      {% for error in errors %}
+      <li>{{ error }}</li>
+      {% endfor %}
+    </ul>
+  </div>
+</div>
+{% endif %}
+
+<form method="post" class="card form">
+  <div class="field wide">
+    <label for="name">Name</label>
+    <input id="name" name="name" value="{{ form.get('name', '') }}" maxlength="100"
+           placeholder="e.g. Netflix, Spotify, Gym" required autofocus>
+  </div>
+
+  <div class="field">
+    <label for="category">Category</label>
+    <select id="category" name="category">
+      {% for category in categories %}
+      <option value="{{ category }}" {% if form.get('category') == category %}selected{% endif %}>{{ category }}</option>
+      {% endfor %}
+    </select>
+  </div>
+
+  <div class="field">
+    <label for="price">Price</label>
+    <div class="money">
+      <span>€</span>
+      <input id="price" name="price" value="{{ form.get('price', '') }}" inputmode="decimal"
+             placeholder="9.99" required>
+    </div>
+  </div>
+
+  <fieldset class="field wide">
+    <legend>How often do you pay?</legend>
+    <div class="pills">
+      {% for cycle in billing_cycles %}
+      <label class="pill">
+        <input type="radio" name="billing_cycle" value="{{ cycle }}"
+               {% if form.get('billing_cycle', 'monthly') == cycle %}checked{% endif %}>
+        <span>{{ cycle | capitalize }}</span>
+      </label>
+      {% endfor %}
+    </div>
+  </fieldset>
+
+  <div class="field">
+    <label for="first_payment_date">First payment date</label>
+    <input id="first_payment_date" type="date" name="first_payment_date"
+           value="{{ form.get('first_payment_date', '') }}" required>
+    <small>For a free trial: the day the trial ends.</small>
+  </div>
+
+  <div class="field">
+    <label for="last_used_date">Last used <span class="optional">optional</span></label>
+    <input id="last_used_date" type="date" name="last_used_date" value="{{ form.get('last_used_date', '') }}">
+    <small>Helps SubTrack spot things you no longer use.</small>
+  </div>
+
+  <label class="toggle wide">
+    <input type="checkbox" name="is_trial" {% if form.get('is_trial') == 'on' %}checked{% endif %}>
+    <span class="switch"></span>
+    <span>
+      <strong>This is a free trial</strong>
+      <small>We'll remind you before it turns into a paid plan.</small>
+    </span>
+  </label>
+
+  <div class="actions wide">
+    <a class="button ghost" href="{{ url_for('subscriptions.list_page') }}">Cancel</a>
+    <button type="submit" class="button">Save subscription</button>
+  </div>
+</form>
+{% endblock %}
