@@ -44,6 +44,46 @@ def add_subscription(sub):
     return new_id
 
 
+def update_subscription(subscription_id, sub):
+    """Save new values over an existing subscription."""
+    conn = db.get_connection()
+    conn.execute(
+        """
+        UPDATE subscriptions
+        SET name = ?, category = ?, price_cents = ?, billing_cycle = ?,
+            first_payment_date = ?, is_trial = ?, last_used_date = ?
+        WHERE id = ?
+        """,
+        (
+            sub["name"],
+            sub["category"],
+            sub["price_cents"],
+            sub["billing_cycle"],
+            sub["first_payment_date"],
+            sub["is_trial"],
+            sub["last_used_date"],
+            subscription_id,
+        ),
+    )
+    conn.commit()
+    conn.close()
+
+
+def cancel_subscription(subscription_id, cancelled_date):
+    """Mark an active subscription as cancelled. The row is kept for the history."""
+    conn = db.get_connection()
+    conn.execute(
+        """
+        UPDATE subscriptions
+        SET status = 'cancelled', cancelled_date = ?
+        WHERE id = ? AND status = 'active'
+        """,
+        (cancelled_date, subscription_id),
+    )
+    conn.commit()
+    conn.close()
+
+
 def list_subscriptions(status="active"):
     """Return every subscription with the given status, sorted by name."""
     conn = db.get_connection()

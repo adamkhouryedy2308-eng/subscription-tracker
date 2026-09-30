@@ -168,3 +168,55 @@ def test_summarise_adds_up_totals_and_finds_the_next_payment():
     assert summary["monthly_total_cents"] == 4349
     assert summary["yearly_total_cents"] == 52188
     assert summary["next_up"]["name"] == "Gym"
+
+
+# --- Editing and cancelling ----------------------------------------------------
+
+def test_subscription_to_form_fills_the_edit_form(temp_db):
+    new_id, errors = service.create_subscription(valid_form(), TODAY)
+    form = service.subscription_to_form(service.get_subscription(new_id))
+    assert form["name"] == "Netflix"
+    assert form["price"] == "13.49"
+    assert form["is_trial"] == ""
+    assert form["last_used_date"] == "2026-09-20"
+
+
+def test_update_subscription_saves_the_changes(temp_db):
+    new_id, errors = service.create_subscription(valid_form(), TODAY)
+    form = valid_form()
+    form["price"] = "15.99"
+    errors = service.update_subscription(new_id, form, TODAY)
+    assert errors == []
+    assert service.get_subscription(new_id)["price_cents"] == 1599
+
+
+def test_update_subscription_with_errors_changes_nothing(temp_db):
+    new_id, errors = service.create_subscription(valid_form(), TODAY)
+    form = valid_form()
+    form["name"] = ""
+    errors = service.update_subscription(new_id, form, TODAY)
+    assert "Name is required." in errors
+    assert service.get_subscription(new_id)["name"] == "Netflix"
+
+
+def test_cancelled_subscription_moves_to_the_cancelled_list(temp_db):
+    new_id, errors = service.create_subscription(valid_form(), TODAY)
+    service.cancel_subscription(new_id, TODAY)
+    assert service.get_active_subscriptions(TODAY) == []
+    cancelled = service.get_cancelled_subscriptions()
+    assert len(cancelled) == 1
+    assert cancelled[0]["cancelled_date"] == TODAY
+    assert cancelled[0]["yearly_saving_cents"] == 16188   # 13.49 x 12
+
+
+def test_cancelling_twice_keeps_the_first_date(temp_db):
+    new_id, errors = service.create_subscription(valid_form(), TODAY)
+    service.cancel_subscription(new_id, TODAY)
+    service.cancel_subscription(new_id, date(2026, 12, 1))
+    assert service.get_cancelled_subscriptions()[0]["cancelled_date"] == TODAY
+
+
+def test_yearly_savings_adds_up_every_cancelled_subscription():
+    cancelled = [{"yearly_saving_cents": 16188}, {"yearly_saving_cents": 3588}]
+    assert service.yearly_savings_cents(cancelled) == 19776
+    assert service.yearly_savings_cents([]) == 0

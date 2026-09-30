@@ -137,6 +137,60 @@ def create_subscription(form, today):
     return repository.add_subscription(clean_data), []
 
 
+def get_subscription(subscription_id):
+    """One subscription as saved in the database, or None if it does not exist."""
+    return repository.get_subscription(subscription_id)
+
+
+def subscription_to_form(sub):
+    """Turn a saved subscription back into form values, so the edit form starts filled in."""
+    return {
+        "name": sub["name"],
+        "category": sub["category"],
+        "price": f"{sub['price_cents'] / 100:.2f}",
+        "billing_cycle": sub["billing_cycle"],
+        "first_payment_date": sub["first_payment_date"],
+        "is_trial": "on" if sub["is_trial"] else "",
+        "last_used_date": sub["last_used_date"] or "",
+    }
+
+
+def update_subscription(subscription_id, form, today):
+    """Validate a form and save it over an existing subscription. Return the errors."""
+    clean_data, errors = validate(form, today)
+    if errors:
+        return errors
+    repository.update_subscription(subscription_id, clean_data)
+    return []
+
+
+def cancel_subscription(subscription_id, today):
+    """Cancel a subscription today. It moves to the cancelled list instead of being deleted."""
+    repository.cancel_subscription(subscription_id, today.isoformat())
+
+
+def get_cancelled_subscriptions():
+    """Cancelled subscriptions, with what cancelling each one saves per year."""
+    result = []
+    for sub in repository.list_subscriptions("cancelled"):
+        result.append({
+            "id": sub["id"],
+            "name": sub["name"],
+            "category": sub["category"],
+            "cancelled_date": parse_date(sub["cancelled_date"]),
+            "yearly_saving_cents": yearly_cost_cents(sub["price_cents"], sub["billing_cycle"]),
+        })
+    return result
+
+
+def yearly_savings_cents(cancelled):
+    """How much the user saves per year thanks to everything they cancelled."""
+    total = 0
+    for sub in cancelled:
+        total += sub["yearly_saving_cents"]
+    return total
+
+
 def get_active_subscriptions(today):
     """The ONE function other domains may call to read subscription data.
 
