@@ -146,6 +146,7 @@ def get_active_subscriptions(today):
     result = []
     for sub in repository.list_subscriptions("active"):
         first_payment = parse_date(sub["first_payment_date"])
+        next_payment = next_payment_date(first_payment, sub["billing_cycle"], today)
         result.append({
             "id": sub["id"],
             "name": sub["name"],
@@ -153,8 +154,28 @@ def get_active_subscriptions(today):
             "price_cents": sub["price_cents"],
             "billing_cycle": sub["billing_cycle"],
             "monthly_cost_cents": monthly_cost_cents(sub["price_cents"], sub["billing_cycle"]),
-            "next_payment_date": next_payment_date(first_payment, sub["billing_cycle"], today),
+            "yearly_cost_cents": yearly_cost_cents(sub["price_cents"], sub["billing_cycle"]),
+            "next_payment_date": next_payment,
+            "days_until_payment": (next_payment - today).days,
             "is_trial": bool(sub["is_trial"]),
             "last_used_date": sub["last_used_date"],
         })
     return result
+
+
+def summarise(subscriptions):
+    """Totals shown at the top of the list page, plus the payment that comes first."""
+    monthly_total = 0
+    yearly_total = 0
+    next_up = None
+    for sub in subscriptions:
+        monthly_total += sub["monthly_cost_cents"]
+        yearly_total += sub["yearly_cost_cents"]
+        if next_up is None or sub["next_payment_date"] < next_up["next_payment_date"]:
+            next_up = sub
+    return {
+        "count": len(subscriptions),
+        "monthly_total_cents": monthly_total,
+        "yearly_total_cents": yearly_total,
+        "next_up": next_up,
+    }

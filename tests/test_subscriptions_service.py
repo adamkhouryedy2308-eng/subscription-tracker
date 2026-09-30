@@ -143,4 +143,28 @@ def test_get_active_subscriptions_works_out_cost_and_next_payment(temp_db):
     assert sub["name"] == "Netflix"
     assert sub["monthly_cost_cents"] == 1000
     assert sub["next_payment_date"] == date(2027, 1, 15)
+    assert sub["days_until_payment"] == 108
+    assert sub["yearly_cost_cents"] == 12000
     assert sub["is_trial"] is False
+
+
+# --- Totals for the list page -------------------------------------------------
+
+def test_summarise_with_no_subscriptions():
+    summary = service.summarise([])
+    assert summary["count"] == 0
+    assert summary["monthly_total_cents"] == 0
+    assert summary["yearly_total_cents"] == 0
+    assert summary["next_up"] is None
+
+
+def test_summarise_adds_up_totals_and_finds_the_next_payment():
+    netflix = {"name": "Netflix", "monthly_cost_cents": 1349, "yearly_cost_cents": 16188,
+               "next_payment_date": date(2026, 10, 15)}
+    gym = {"name": "Gym", "monthly_cost_cents": 3000, "yearly_cost_cents": 36000,
+           "next_payment_date": date(2026, 10, 2)}
+    summary = service.summarise([netflix, gym])
+    assert summary["count"] == 2
+    assert summary["monthly_total_cents"] == 4349
+    assert summary["yearly_total_cents"] == 52188
+    assert summary["next_up"]["name"] == "Gym"
