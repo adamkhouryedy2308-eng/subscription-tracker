@@ -13,10 +13,10 @@
   </a>
 </header>
 
-{% if added %}
+{% if notice %}
 <div class="notice success">
   <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M8 12l3 3 5-6"/></svg>
-  <span><strong>{{ added }}</strong> was added to your subscriptions.</span>
+  <span><strong>{{ notice.name }}</strong> {{ notice.text }}</span>
 </div>
 {% endif %}
 
@@ -48,6 +48,7 @@
     <span>Price</span>
     <span>Per month</span>
     <span>Next payment</span>
+    <span></span>
   </div>
 
   {% for sub in subscriptions %}
@@ -79,6 +80,19 @@
       </span>
       <span class="muted date">{{ sub.next_payment_date.strftime("%d %b %Y") }}</span>
     </div>
+    <div class="row-actions">
+      <a class="icon-button" href="{{ url_for('subscriptions.edit_page', subscription_id=sub.id) }}" title="Edit {{ sub.name }}">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16v4z"/><path d="M13.5 6.5l4 4"/></svg>
+        <span class="sr-only">Edit</span>
+      </a>
+      <form method="post" action="{{ url_for('subscriptions.cancel', subscription_id=sub.id) }}"
+            onsubmit="return confirm('Cancel {{ sub.name }}? It will move to your cancelled list.');">
+        <button class="icon-button danger" type="submit" title="Cancel {{ sub.name }}">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9 9l6 6"/><path d="M15 9l-6 6"/></svg>
+          <span class="sr-only">Cancel</span>
+        </button>
+      </form>
+    </div>
   </div>
   {% endfor %}
 </section>
@@ -91,6 +105,40 @@
   <h2>No subscriptions yet</h2>
   <p>Add Netflix, Spotify, your gym or anything else you pay for regularly, and SubTrack will show what it really costs you.</p>
   <a class="button" href="{{ url_for('subscriptions.add_page') }}">Add your first subscription</a>
+</section>
+{% endif %}
+
+{% if cancelled %}
+<section class="cancelled">
+  <div class="section-head">
+    <h2>Cancelled</h2>
+    <span class="savings">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 17l6-6 4 4 8-8"/><path d="M14 7h7v7"/></svg>
+      You're saving <strong>{{ yearly_savings | euros }}</strong> a year
+    </span>
+  </div>
+  <div class="card">
+    {% for sub in cancelled %}
+    {% set category_class = sub.category | lower | replace(" & ", "-") | replace(" ", "-") %}
+    <div class="row row-cancelled cat-{{ category_class }}">
+      <div class="row-main">
+        <span class="avatar">{{ sub.name[0] | upper }}</span>
+        <div>
+          <div class="row-name">{{ sub.name }}</div>
+          <span class="chip">{{ sub.category }}</span>
+        </div>
+      </div>
+      <div class="row-cell">
+        <span class="cell-label">Cancelled</span>
+        <span class="muted">Cancelled {{ sub.cancelled_date.strftime("%d %b %Y") }}</span>
+      </div>
+      <div class="row-cell strong saving">
+        <span class="cell-label">Saving</span>
+        {{ sub.yearly_saving_cents | euros }} / year
+      </div>
+    </div>
+    {% endfor %}
+  </div>
 </section>
 {% endif %}
 {% endblock %}

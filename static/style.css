@@ -313,7 +313,7 @@ svg {
 .list-head,
 .row {
   display: grid;
-  grid-template-columns: 2.2fr 1.2fr 1fr 1.3fr;
+  grid-template-columns: 2.2fr 1.2fr 1fr 1.3fr 84px;
   gap: 16px;
   align-items: center;
   padding: 14px 22px;
@@ -414,6 +414,108 @@ svg {
 
 .date {
   font-size: 0.85rem;
+}
+
+/* ---------- Edit and cancel buttons ---------- */
+.row-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 4px;
+}
+
+.row-actions form {
+  margin: 0;
+}
+
+.icon-button {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.icon-button svg {
+  width: 18px;
+  height: 18px;
+}
+
+.icon-button:hover {
+  background: var(--brand-soft);
+  color: var(--brand);
+}
+
+.icon-button.danger:hover {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+/* Text only for screen readers (the buttons show icons) */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+}
+
+/* ---------- Cancelled subscriptions ---------- */
+.cancelled {
+  margin-top: 36px;
+}
+
+.section-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.section-head h2 {
+  font-size: 1.2rem;
+}
+
+.savings {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 14px;
+  border-radius: 999px;
+  background: var(--success-soft);
+  color: var(--success);
+  font-size: 0.9rem;
+}
+
+.savings svg {
+  width: 18px;
+  height: 18px;
+}
+
+.row.row-cancelled {
+  grid-template-columns: 2.2fr 1.5fr 1fr;
+}
+
+.row-cancelled .avatar {
+  filter: grayscale(0.6);
+  opacity: 0.8;
+}
+
+.row-cancelled .row-name {
+  color: var(--muted);
+  text-decoration: line-through;
+}
+
+.saving {
+  color: var(--success);
 }
 
 /* ---------- Empty state ---------- */
@@ -672,6 +774,15 @@ select:focus {
 
   .row-main {
     grid-column: 1 / -1;
+  }
+
+  .row-actions {
+    grid-column: 1 / -1;
+    justify-content: flex-start;
+  }
+
+  .row.row-cancelled {
+    grid-template-columns: 1fr 1fr;
   }
 
   .cell-label {
