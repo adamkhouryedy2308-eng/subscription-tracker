@@ -32,6 +32,13 @@ Budgets & Alerts only reads subscription data through one function exposed by
 the Subscriptions domain – it never queries the `subscriptions` table directly.
 That function is the "seam" where the app could later be split into two services.
 
+### Accounts (login)
+
+Accounts is a supporting part, not a third feature domain: people sign up with
+an email and password, log in and log out. Passwords are stored only as a hash,
+every page except log in and sign up needs a login, and each user only sees
+their own subscriptions. See ADR-3.
+
 ## Scope update after professor feedback (2026-09-29)
 
 The professor approved the idea but called it "a bit simple". To add depth
@@ -65,6 +72,17 @@ a real problem.
 3. **Achievable:** Use only Python, Flask and SQLite (≤ 5 direct third-party packages) so I can explain every line.
 4. **Relevant:** The dashboard shows total monthly spending, any category that is over budget, and active alerts.
 5. **Time-bound:** Both domains working, tested and documented by **2026-10-04**.
+
+## How the work is organised in Git
+
+- `main` always holds working, tested code.
+- Each feature is built on its own short-lived branch named `feature/<name>`
+  (for example `feature/login`), pushed to GitHub and merged into `main`
+  through a pull request once all tests pass.
+- Pull requests are merged with **Create a merge commit**, so every commit made
+  on the branch stays in the history of `main`.
+- Until 2026-09-30 commits went straight to `main`; from the login feature on
+  (2026-10-01), every feature uses its own branch.
 
 ## Status
 
