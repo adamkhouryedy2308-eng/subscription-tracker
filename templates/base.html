@@ -7,6 +7,7 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
+  {% if g.user %}
   <div class="shell">
     <aside class="sidebar">
       <a class="brand" href="{{ url_for('home') }}">
@@ -30,11 +31,27 @@
       </nav>
 
       <p class="sidebar-note">Know what you pay for.<br>Keep what you use.</p>
+
+      <div class="user-box">
+        <span class="user-avatar">{{ g.user.email[0] | upper }}</span>
+        <span class="user-email" title="{{ g.user.email }}">{{ g.user.email }}</span>
+        <form method="post" action="{{ url_for('accounts.logout') }}">
+          <button class="icon-button" type="submit" title="Log out">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3"/><path d="M10 17l-5-5 5-5"/><path d="M5 12h11"/></svg>
+            <span class="sr-only">Log out</span>
+          </button>
+        </form>
+      </div>
     </aside>
 
     <main class="content">
       {% block content %}{% endblock %}
     </main>
   </div>
+  {% else %}
+  <main class="auth-shell">
+    {{ self.content() }}
+  </main>
+  {% endif %}
 </body>
 </html>

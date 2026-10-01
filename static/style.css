@@ -172,6 +172,101 @@ svg {
   padding: 40px 48px 64px;
 }
 
+/* ---------- Logged-in user at the bottom of the sidebar ---------- */
+.user-box {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 8px 0;
+  border-top: 1px solid var(--border);
+}
+
+.user-box form {
+  margin: 0 0 0 auto;
+}
+
+.user-avatar {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--brand-soft);
+  color: var(--brand);
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.user-email {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 0.85rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---------- Log in and sign up pages ---------- */
+.auth-shell {
+  display: grid;
+  place-items: center;
+  min-height: 100vh;
+  padding: 32px 16px;
+  background:
+    radial-gradient(circle at 15% 10%, var(--brand-soft), transparent 45%),
+    radial-gradient(circle at 85% 90%, var(--brand-soft), transparent 40%),
+    var(--bg);
+}
+
+.auth-card {
+  width: 100%;
+  max-width: 420px;
+  padding: 36px 32px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  box-shadow: var(--shadow);
+}
+
+.auth-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 28px;
+  font-size: 1.15rem;
+  font-weight: 700;
+}
+
+.auth-card h1 {
+  font-size: 1.6rem;
+}
+
+.auth-card .subtitle {
+  margin-bottom: 24px;
+}
+
+.auth-form {
+  display: grid;
+  gap: 18px;
+}
+
+.button.full {
+  justify-content: center;
+  width: 100%;
+  margin-top: 4px;
+}
+
+.auth-switch {
+  margin: 22px 0 0;
+  color: var(--muted);
+  text-align: center;
+}
+
+.auth-switch a {
+  font-weight: 600;
+  text-decoration: none;
+}
+
 /* ---------- Page header ---------- */
 .page-head {
   display: flex;
@@ -590,6 +685,8 @@ svg {
 input[type="text"],
 input:not([type]),
 input[type="date"],
+input[type="email"],
+input[type="password"],
 select {
   width: 100%;
   padding: 11px 13px;
@@ -756,6 +853,15 @@ select:focus {
     display: none;
   }
 
+  .user-box {
+    padding: 0;
+    border-top: none;
+  }
+
+  .user-email {
+    display: none;
+  }
+
   .content {
     padding: 24px 16px 48px;
   }
@@ -807,5 +913,13 @@ select:focus {
 
   .brand-name {
     display: none;
+  }
+
+  .user-avatar {
+    display: none;
+  }
+
+  .auth-card {
+    padding: 28px 20px;
   }
 }
