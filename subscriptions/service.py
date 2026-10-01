@@ -129,17 +129,17 @@ def next_payment_date(first_payment, billing_cycle, today):
     return payment
 
 
-def create_subscription(form, today):
-    """Validate a form and save it. Return (new_id, errors)."""
+def create_subscription(user_id, form, today):
+    """Validate a form and save it for this user. Return (new_id, errors)."""
     clean_data, errors = validate(form, today)
     if errors:
         return None, errors
-    return repository.add_subscription(clean_data), []
+    return repository.add_subscription(user_id, clean_data), []
 
 
-def get_subscription(subscription_id):
-    """One subscription as saved in the database, or None if it does not exist."""
-    return repository.get_subscription(subscription_id)
+def get_subscription(user_id, subscription_id):
+    """One of this user's subscriptions as saved, or None if it is not theirs or does not exist."""
+    return repository.get_subscription(user_id, subscription_id)
 
 
 def subscription_to_form(sub):
@@ -155,24 +155,24 @@ def subscription_to_form(sub):
     }
 
 
-def update_subscription(subscription_id, form, today):
-    """Validate a form and save it over an existing subscription. Return the errors."""
+def update_subscription(user_id, subscription_id, form, today):
+    """Validate a form and save it over one of this user's subscriptions. Return the errors."""
     clean_data, errors = validate(form, today)
     if errors:
         return errors
-    repository.update_subscription(subscription_id, clean_data)
+    repository.update_subscription(user_id, subscription_id, clean_data)
     return []
 
 
-def cancel_subscription(subscription_id, today):
+def cancel_subscription(user_id, subscription_id, today):
     """Cancel a subscription today. It moves to the cancelled list instead of being deleted."""
-    repository.cancel_subscription(subscription_id, today.isoformat())
+    repository.cancel_subscription(user_id, subscription_id, today.isoformat())
 
 
-def get_cancelled_subscriptions():
-    """Cancelled subscriptions, with what cancelling each one saves per year."""
+def get_cancelled_subscriptions(user_id):
+    """This user's cancelled subscriptions, with what cancelling each one saves per year."""
     result = []
-    for sub in repository.list_subscriptions("cancelled"):
+    for sub in repository.list_subscriptions(user_id, "cancelled"):
         result.append({
             "id": sub["id"],
             "name": sub["name"],
@@ -191,14 +191,15 @@ def yearly_savings_cents(cancelled):
     return total
 
 
-def get_active_subscriptions(today):
+def get_active_subscriptions(user_id, today):
     """The ONE function other domains may call to read subscription data.
 
-    Returns plain dicts with the monthly cost and next payment date worked out,
-    so callers never need to know how the subscriptions table looks.
+    Returns this user's subscriptions as plain dicts with the monthly cost and
+    next payment date worked out, so callers never need to know how the
+    subscriptions table looks.
     """
     result = []
-    for sub in repository.list_subscriptions("active"):
+    for sub in repository.list_subscriptions(user_id, "active"):
         first_payment = parse_date(sub["first_payment_date"])
         next_payment = next_payment_date(first_payment, sub["billing_cycle"], today)
         result.append({
