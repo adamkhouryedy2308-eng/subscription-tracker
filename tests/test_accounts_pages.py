@@ -1,6 +1,7 @@
 import os
 
 import app as app_module
+from tests.test_subscriptions_pages import NETFLIX
 
 ANA = {"email": "ana@example.com", "password": "secret-pass", "confirm_password": "secret-pass"}
 BEN = {"email": "ben@example.com", "password": "other-pass", "confirm_password": "other-pass"}
@@ -71,6 +72,25 @@ def test_logging_out_ends_the_session(client):
 
 def test_logout_only_works_with_post(client):
     assert client.get("/logout").status_code == 405
+
+
+# --- Privacy between users -----------------------------------------------------
+
+def test_users_never_see_or_change_each_others_subscriptions(guest):
+    guest.post("/register", data=ANA)
+    guest.post("/subscriptions/new", data=NETFLIX)
+    guest.post("/logout")
+
+    guest.post("/register", data=BEN)
+    page = guest.get("/subscriptions/").get_data(as_text=True)
+    assert "No subscriptions yet" in page
+    assert "€13.49" not in page
+    assert guest.get("/subscriptions/1/edit").status_code == 404
+    assert guest.post("/subscriptions/1/cancel").status_code == 404
+
+    guest.post("/logout")
+    guest.post("/login", data={"email": "ana@example.com", "password": "secret-pass"})
+    assert "€13.49" in guest.get("/subscriptions/").get_data(as_text=True)
 
 
 # --- The secret key that signs the login cookie ---------------------------------

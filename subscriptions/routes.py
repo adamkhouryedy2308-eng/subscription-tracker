@@ -1,7 +1,7 @@
 """Web pages for the subscriptions domain."""
 from datetime import date
 
-from flask import Blueprint, abort, redirect, render_template, request, url_for
+from flask import Blueprint, abort, redirect, render_template, request, session, url_for
 
 from subscriptions import service
 
@@ -18,8 +18,9 @@ NOTICES = {
 @bp.route("/")
 def list_page():
     """Show the totals, every active subscription and the cancelled ones."""
-    subscriptions = service.get_active_subscriptions(date.today())
-    cancelled = service.get_cancelled_subscriptions()
+    user_id = session["user_id"]
+    subscriptions = service.get_active_subscriptions(user_id, date.today())
+    cancelled = service.get_cancelled_subscriptions(user_id)
 
     notice = None
     for action, text in NOTICES.items():
@@ -42,7 +43,8 @@ def add_page():
     title = "Add a subscription"
     subtitle = "It takes 20 seconds. You can change anything later."
     if request.method == "POST":
-        new_id, errors = service.create_subscription(request.form, date.today())
+        user_id = session["user_id"]
+        new_id, errors = service.create_subscription(user_id, request.form, date.today())
         if not errors:
             name = request.form["name"].strip()
             return redirect(url_for("subscriptions.list_page", added=name))
@@ -53,14 +55,15 @@ def add_page():
 @bp.route("/<int:subscription_id>/edit", methods=["GET", "POST"])
 def edit_page(subscription_id):
     """GET shows the form filled in; POST checks the changes and saves them."""
-    sub = service.get_subscription(subscription_id)
+    user_id = session["user_id"]
+    sub = service.get_subscription(user_id, subscription_id)
     if sub is None or sub["status"] != "active":
         abort(404)
 
     title = f"Edit {sub['name']}"
     subtitle = "Change what you need and save."
     if request.method == "POST":
-        errors = service.update_subscription(subscription_id, request.form, date.today())
+        errors = service.update_subscription(user_id, subscription_id, request.form, date.today())
         if not errors:
             name = request.form["name"].strip()
             return redirect(url_for("subscriptions.list_page", updated=name))
@@ -71,10 +74,11 @@ def edit_page(subscription_id):
 @bp.route("/<int:subscription_id>/cancel", methods=["POST"])
 def cancel(subscription_id):
     """Cancel a subscription. Only POST is allowed, because it changes data."""
-    sub = service.get_subscription(subscription_id)
+    user_id = session["user_id"]
+    sub = service.get_subscription(user_id, subscription_id)
     if sub is None:
         abort(404)
-    service.cancel_subscription(subscription_id, date.today())
+    service.cancel_subscription(user_id, subscription_id, date.today())
     return redirect(url_for("subscriptions.list_page", cancelled=sub["name"]))
 
 

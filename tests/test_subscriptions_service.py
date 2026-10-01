@@ -5,6 +5,7 @@ import pytest
 from subscriptions import service
 
 TODAY = date(2026, 9, 29)
+USER_ID = 1
 
 
 def valid_form():
@@ -118,7 +119,7 @@ def test_monthly_payments_keep_the_31st_after_a_short_month():
 # --- Saving and the public function for other domains -------------------------
 
 def test_create_subscription_saves_a_valid_form(temp_db):
-    new_id, errors = service.create_subscription(valid_form(), TODAY)
+    new_id, errors = service.create_subscription(USER_ID, valid_form(), TODAY)
     assert errors == []
     assert new_id is not None
 
@@ -126,18 +127,18 @@ def test_create_subscription_saves_a_valid_form(temp_db):
 def test_create_subscription_saves_nothing_when_invalid(temp_db):
     form = valid_form()
     form["price"] = "abc"
-    new_id, errors = service.create_subscription(form, TODAY)
+    new_id, errors = service.create_subscription(USER_ID, form, TODAY)
     assert new_id is None
     assert errors
-    assert service.get_active_subscriptions(TODAY) == []
+    assert service.get_active_subscriptions(USER_ID, TODAY) == []
 
 
 def test_get_active_subscriptions_works_out_cost_and_next_payment(temp_db):
     form = valid_form()
     form["billing_cycle"] = "yearly"
     form["price"] = "120"
-    service.create_subscription(form, TODAY)
-    subs = service.get_active_subscriptions(TODAY)
+    service.create_subscription(USER_ID, form, TODAY)
+    subs = service.get_active_subscriptions(USER_ID, TODAY)
     assert len(subs) == 1
     sub = subs[0]
     assert sub["name"] == "Netflix"
@@ -173,8 +174,8 @@ def test_summarise_adds_up_totals_and_finds_the_next_payment():
 # --- Editing and cancelling ----------------------------------------------------
 
 def test_subscription_to_form_fills_the_edit_form(temp_db):
-    new_id, errors = service.create_subscription(valid_form(), TODAY)
-    form = service.subscription_to_form(service.get_subscription(new_id))
+    new_id, errors = service.create_subscription(USER_ID, valid_form(), TODAY)
+    form = service.subscription_to_form(service.get_subscription(USER_ID, new_id))
     assert form["name"] == "Netflix"
     assert form["price"] == "13.49"
     assert form["is_trial"] == ""
@@ -182,41 +183,58 @@ def test_subscription_to_form_fills_the_edit_form(temp_db):
 
 
 def test_update_subscription_saves_the_changes(temp_db):
-    new_id, errors = service.create_subscription(valid_form(), TODAY)
+    new_id, errors = service.create_subscription(USER_ID, valid_form(), TODAY)
     form = valid_form()
     form["price"] = "15.99"
-    errors = service.update_subscription(new_id, form, TODAY)
+    errors = service.update_subscription(USER_ID, new_id, form, TODAY)
     assert errors == []
-    assert service.get_subscription(new_id)["price_cents"] == 1599
+    assert service.get_subscription(USER_ID, new_id)["price_cents"] == 1599
 
 
 def test_update_subscription_with_errors_changes_nothing(temp_db):
-    new_id, errors = service.create_subscription(valid_form(), TODAY)
+    new_id, errors = service.create_subscription(USER_ID, valid_form(), TODAY)
     form = valid_form()
     form["name"] = ""
-    errors = service.update_subscription(new_id, form, TODAY)
+    errors = service.update_subscription(USER_ID, new_id, form, TODAY)
     assert "Name is required." in errors
-    assert service.get_subscription(new_id)["name"] == "Netflix"
+    assert service.get_subscription(USER_ID, new_id)["name"] == "Netflix"
 
 
 def test_cancelled_subscription_moves_to_the_cancelled_list(temp_db):
-    new_id, errors = service.create_subscription(valid_form(), TODAY)
-    service.cancel_subscription(new_id, TODAY)
-    assert service.get_active_subscriptions(TODAY) == []
-    cancelled = service.get_cancelled_subscriptions()
+    new_id, errors = service.create_subscription(USER_ID, valid_form(), TODAY)
+    service.cancel_subscription(USER_ID, new_id, TODAY)
+    assert service.get_active_subscriptions(USER_ID, TODAY) == []
+    cancelled = service.get_cancelled_subscriptions(USER_ID)
     assert len(cancelled) == 1
     assert cancelled[0]["cancelled_date"] == TODAY
     assert cancelled[0]["yearly_saving_cents"] == 16188   # 13.49 x 12
 
 
 def test_cancelling_twice_keeps_the_first_date(temp_db):
-    new_id, errors = service.create_subscription(valid_form(), TODAY)
-    service.cancel_subscription(new_id, TODAY)
-    service.cancel_subscription(new_id, date(2026, 12, 1))
-    assert service.get_cancelled_subscriptions()[0]["cancelled_date"] == TODAY
+    new_id, errors = service.create_subscription(USER_ID, valid_form(), TODAY)
+    service.cancel_subscription(USER_ID, new_id, TODAY)
+    service.cancel_subscription(USER_ID, new_id, date(2026, 12, 1))
+    assert service.get_cancelled_subscriptions(USER_ID)[0]["cancelled_date"] == TODAY
 
 
 def test_yearly_savings_adds_up_every_cancelled_subscription():
     cancelled = [{"yearly_saving_cents": 16188}, {"yearly_saving_cents": 3588}]
     assert service.yearly_savings_cents(cancelled) == 19776
     assert service.yearly_savings_cents([]) == 0
+
+
+# --- Each user only sees their own subscriptions ------------------------------
+
+def test_another_user_cannot_see_or_change_my_subscription(temp_db):
+    new_id, errors = service.create_subscription(USER_ID, valid_form(), TODAY)
+    other_user = 2
+    assert service.get_active_subscriptions(other_user, TODAY) == []
+    assert service.get_subscription(other_user, new_id) is None
+
+    form = valid_form()
+    form["price"] = "0.99"
+    service.update_subscription(other_user, new_id, form, TODAY)
+    service.cancel_subscription(other_user, new_id, TODAY)
+    mine = service.get_subscription(USER_ID, new_id)
+    assert mine["price_cents"] == 1349
+    assert mine["status"] == "active"
