@@ -6,6 +6,8 @@ from flask import Flask, redirect, url_for
 import db
 from accounts import repository as accounts_repository
 from accounts.routes import bp as accounts_pages
+from budgets import repository as budgets_repository
+from budgets.routes import bp as budgets_pages
 from subscriptions import repository as subscriptions_repository
 from subscriptions.routes import bp as subscriptions_pages
 
@@ -28,11 +30,16 @@ def create_app():
     app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 
     # Each part of the app hands in its own table; db.py never changes.
-    db.init_db([accounts_repository.CREATE_TABLE, subscriptions_repository.CREATE_TABLE])
+    db.init_db([
+        accounts_repository.CREATE_TABLE,
+        subscriptions_repository.CREATE_TABLE,
+        budgets_repository.CREATE_TABLE,
+    ])
 
     # Each part of the app brings its own group of pages (a Blueprint).
     app.register_blueprint(accounts_pages)
     app.register_blueprint(subscriptions_pages)
+    app.register_blueprint(budgets_pages)
 
     @app.template_filter("euros")
     def euros(cents):
