@@ -613,6 +613,80 @@ svg {
   color: var(--success);
 }
 
+/* ---------- Budgets ---------- */
+.list-head.budget-row,
+.row.budget-row {
+  grid-template-columns: 1.5fr 2.2fr 1fr 48px;
+}
+
+.bar {
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--border);
+}
+
+.bar-fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--cat);
+}
+
+.bar-fill.status-ok {
+  background: var(--success);
+}
+
+.bar-fill.status-near {
+  background: var(--warning);
+}
+
+.bar-fill.status-over {
+  background: var(--danger);
+}
+
+.bar-label {
+  display: block;
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.bar-label.near {
+  color: var(--warning);
+  font-weight: 600;
+}
+
+.bar-label.over {
+  color: var(--danger);
+  font-weight: 600;
+}
+
+.stat-alert {
+  border-color: var(--danger);
+  background: var(--danger-soft);
+}
+
+.stat-alert .stat-value {
+  color: var(--danger);
+}
+
+.form.budget-form {
+  max-width: none;
+  margin-top: 24px;
+}
+
+.budget-form h2 {
+  font-size: 1.2rem;
+}
+
+.budget-fields {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr auto;
+  gap: 16px;
+  align-items: end;
+}
+
 /* ---------- Empty state ---------- */
 .empty {
   padding: 56px 24px;
@@ -887,8 +961,17 @@ select:focus {
     justify-content: flex-start;
   }
 
-  .row.row-cancelled {
+  .row.row-cancelled,
+  .row.budget-row {
     grid-template-columns: 1fr 1fr;
+  }
+
+  .budget-progress {
+    grid-column: 1 / -1;
+  }
+
+  .budget-fields {
+    grid-template-columns: 1fr;
   }
 
   .cell-label {
