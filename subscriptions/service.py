@@ -210,6 +210,7 @@ def get_active_subscriptions(user_id, today):
             "billing_cycle": sub["billing_cycle"],
             "monthly_cost_cents": monthly_cost_cents(sub["price_cents"], sub["billing_cycle"]),
             "yearly_cost_cents": yearly_cost_cents(sub["price_cents"], sub["billing_cycle"]),
+            "first_payment_date": first_payment,
             "next_payment_date": next_payment,
             "days_until_payment": (next_payment - today).days,
             "is_trial": bool(sub["is_trial"]),

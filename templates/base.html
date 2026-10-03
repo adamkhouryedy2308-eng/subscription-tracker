@@ -33,6 +33,12 @@
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v9h9"/><circle cx="12" cy="12" r="9"/></svg>
           Budgets
         </a>
+        <a class="nav-link {% if request.endpoint == 'budgets.alerts_page' %}active{% endif %}"
+           href="{{ url_for('budgets.alerts_page') }}">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>
+          Alerts
+          {% if alert_count %}<span class="nav-badge" title="{{ alert_count }} alerts">{{ alert_count }}</span>{% endif %}
+        </a>
       </nav>
 
       <p class="sidebar-note">Know what you pay for.<br>Keep what you use.</p>
