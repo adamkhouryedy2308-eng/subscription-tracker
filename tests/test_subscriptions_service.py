@@ -238,3 +238,59 @@ def test_another_user_cannot_see_or_change_my_subscription(temp_db):
     mine = service.get_subscription(USER_ID, new_id)
     assert mine["price_cents"] == 1349
     assert mine["status"] == "active"
+
+
+# --- Price history ----------------------------------------------------------------
+
+def test_editing_the_price_saves_a_price_change(temp_db):
+    new_id, errors = service.create_subscription(USER_ID, valid_form(), TODAY)
+    form = valid_form()
+    form["price"] = "15.99"
+    service.update_subscription(USER_ID, new_id, form, TODAY)
+    history = service.get_price_history(USER_ID, new_id)
+    assert history == [{"old_price_cents": 1349, "new_price_cents": 1599, "changed_date": TODAY}]
+
+
+def test_editing_without_changing_the_price_saves_no_price_change(temp_db):
+    new_id, errors = service.create_subscription(USER_ID, valid_form(), TODAY)
+    form = valid_form()
+    form["name"] = "Netflix Standard"
+    service.update_subscription(USER_ID, new_id, form, TODAY)
+    assert service.get_price_history(USER_ID, new_id) == []
+
+
+def test_another_user_cannot_add_or_read_price_history(temp_db):
+    new_id, errors = service.create_subscription(USER_ID, valid_form(), TODAY)
+    form = valid_form()
+    form["price"] = "0.99"
+    other_user = 2
+    service.update_subscription(other_user, new_id, form, TODAY)
+    assert service.get_price_history(USER_ID, new_id) == []
+    assert service.get_price_history(other_user, new_id) == []
+
+
+@pytest.mark.parametrize("old, new, percent", [(1000, 1250, 25), (1000, 900, -10), (1349, 1349, 0), (0, 500, 0)])
+def test_percent_change(old, new, percent):
+    assert service.percent_change(old, new) == percent
+
+
+def test_seam_shares_the_original_price_and_the_last_change(temp_db):
+    new_id, errors = service.create_subscription(USER_ID, valid_form(), TODAY)
+    form = valid_form()
+    form["price"] = "14.99"
+    service.update_subscription(USER_ID, new_id, form, date(2026, 9, 25))
+    form["price"] = "15.99"
+    service.update_subscription(USER_ID, new_id, form, TODAY)
+
+    sub = service.get_active_subscriptions(USER_ID, TODAY)[0]
+    assert sub["original_price_cents"] == 1349
+    assert sub["price_change_percent"] == 19
+    assert sub["last_price_change"] == {"old_price_cents": 1499, "new_price_cents": 1599, "changed_date": TODAY}
+
+
+def test_seam_without_price_changes(temp_db):
+    service.create_subscription(USER_ID, valid_form(), TODAY)
+    sub = service.get_active_subscriptions(USER_ID, TODAY)[0]
+    assert sub["original_price_cents"] == 1349
+    assert sub["price_change_percent"] == 0
+    assert sub["last_price_change"] is None
