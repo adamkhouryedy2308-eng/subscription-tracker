@@ -687,6 +687,74 @@ svg {
   align-items: end;
 }
 
+/* ---------- Alerts ---------- */
+.nav-badge {
+  min-width: 22px;
+  margin-left: auto;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--danger);
+  color: #ffffff;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-align: center;
+}
+
+.alert-list {
+  display: grid;
+  gap: 12px;
+}
+
+.alert-card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 18px 20px;
+}
+
+.alert-trial_ending { --tone: var(--warning); }
+.alert-over_budget { --tone: var(--danger); }
+.alert-payment_soon { --tone: var(--brand); }
+.alert-unused { --tone: var(--muted); }
+
+.alert-icon {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  flex-shrink: 0;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--tone) 14%, var(--surface));
+  color: var(--tone);
+}
+
+.alert-card h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.alert-card p {
+  margin: 3px 0 0;
+  color: var(--muted);
+}
+
+.alert-card p strong {
+  color: var(--text);
+}
+
+.alert-action {
+  margin-left: auto;
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.alert-rules {
+  margin-top: 28px;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
 /* ---------- Empty state ---------- */
 .empty {
   padding: 56px 24px;
@@ -972,6 +1040,14 @@ select:focus {
 
   .budget-fields {
     grid-template-columns: 1fr;
+  }
+
+  .alert-card {
+    flex-wrap: wrap;
+  }
+
+  .alert-action {
+    margin-left: 58px;
   }
 
   .cell-label {
