@@ -88,4 +88,19 @@
     <button type="submit" class="button">Save subscription</button>
   </div>
 </form>
+
+{% if history %}
+<section class="card history-card">
+  <h2>Price history</h2>
+  {% for change in history | reverse %}
+  <div class="history-row">
+    <span class="muted">{{ change.changed_date.strftime("%d %b %Y") }}</span>
+    <span>{{ change.old_price_cents | euros }} → <strong>{{ change.new_price_cents | euros }}</strong></span>
+    <span class="badge {% if change.percent > 0 %}price-up{% else %}price-down{% endif %}">
+      {% if change.percent > 0 %}▲ {{ change.percent }}%{% else %}▼ {{ -change.percent }}%{% endif %}
+    </span>
+  </div>
+  {% endfor %}
+</section>
+{% endif %}
 {% endblock %}

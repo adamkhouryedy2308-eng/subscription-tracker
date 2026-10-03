@@ -48,3 +48,12 @@ def test_other_users_never_see_my_alerts(client):
     client.post("/logout")
     client.post("/register", data=BEN)
     assert "All clear" in client.get("/budgets/alerts").get_data(as_text=True)
+
+
+
+def test_a_price_rise_shows_an_alert(client):
+    client.post("/subscriptions/new", data=dict(NETFLIX, first_payment_date=in_days(20)))
+    client.post("/subscriptions/1/edit", data=dict(NETFLIX, first_payment_date=in_days(20), price="15.99"))
+    page = client.get("/budgets/alerts").get_data(as_text=True)
+    assert "Price went up" in page
+    assert "went up from €13.49 to €15.99 (+19%)" in page

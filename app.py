@@ -33,6 +33,7 @@ def create_app():
     db.init_db([
         accounts_repository.CREATE_TABLE,
         subscriptions_repository.CREATE_TABLE,
+        subscriptions_repository.CREATE_PRICE_CHANGES_TABLE,
         budgets_repository.CREATE_TABLE,
     ])
 

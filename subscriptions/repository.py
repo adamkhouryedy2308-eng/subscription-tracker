@@ -18,6 +18,16 @@ CREATE TABLE IF NOT EXISTS subscriptions (
 )
 """
 
+CREATE_PRICE_CHANGES_TABLE = """
+CREATE TABLE IF NOT EXISTS price_changes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    subscription_id INTEGER NOT NULL REFERENCES subscriptions (id),
+    old_price_cents INTEGER NOT NULL,
+    new_price_cents INTEGER NOT NULL,
+    changed_date TEXT NOT NULL
+)
+"""
+
 
 def add_subscription(user_id, sub):
     """Save a new subscription for this user and return its id."""
@@ -107,3 +117,28 @@ def get_subscription(user_id, subscription_id):
     ).fetchone()
     conn.close()
     return dict(row) if row else None
+
+
+def add_price_change(subscription_id, old_price_cents, new_price_cents, changed_date):
+    """Remember that a subscription's price changed."""
+    conn = db.get_connection()
+    conn.execute(
+        """
+        INSERT INTO price_changes (subscription_id, old_price_cents, new_price_cents, changed_date)
+        VALUES (?, ?, ?, ?)
+        """,
+        (subscription_id, old_price_cents, new_price_cents, changed_date),
+    )
+    conn.commit()
+    conn.close()
+
+
+def list_price_changes(subscription_id):
+    """Every price change of one subscription, oldest first."""
+    conn = db.get_connection()
+    rows = conn.execute(
+        "SELECT * FROM price_changes WHERE subscription_id = ? ORDER BY changed_date, id",
+        (subscription_id,),
+    ).fetchall()
+    conn.close()
+    return [dict(row) for row in rows]

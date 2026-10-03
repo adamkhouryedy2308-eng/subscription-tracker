@@ -156,12 +156,43 @@ def subscription_to_form(sub):
 
 
 def update_subscription(user_id, subscription_id, form, today):
-    """Validate a form and save it over one of this user's subscriptions. Return the errors."""
+    """Validate a form and save it over one of this user's subscriptions. Return the errors.
+
+    If the price is different from before, the change is also saved in the price history.
+    """
     clean_data, errors = validate(form, today)
     if errors:
         return errors
+    old = repository.get_subscription(user_id, subscription_id)
+    if old is None:
+        return []
     repository.update_subscription(user_id, subscription_id, clean_data)
+    if clean_data["price_cents"] != old["price_cents"]:
+        repository.add_price_change(subscription_id, old["price_cents"],
+                                    clean_data["price_cents"], today.isoformat())
     return []
+
+
+def get_price_history(user_id, subscription_id):
+    """The price changes of one of this user's subscriptions, oldest first ([] if it is not theirs)."""
+    if repository.get_subscription(user_id, subscription_id) is None:
+        return []
+    history = []
+    for change in repository.list_price_changes(subscription_id):
+        history.append({
+            "old_price_cents": change["old_price_cents"],
+            "new_price_cents": change["new_price_cents"],
+            "changed_date": parse_date(change["changed_date"]),
+            "percent": percent_change(change["old_price_cents"], change["new_price_cents"]),
+        })
+    return history
+
+
+def percent_change(old_cents, new_cents):
+    """How much a price changed, in whole percent: 1000 to 1250 is 25, 1000 to 900 is -10."""
+    if old_cents == 0:
+        return 0
+    return round((new_cents - old_cents) * 100 / old_cents)
 
 
 def cancel_subscription(user_id, subscription_id, today):
@@ -202,6 +233,8 @@ def get_active_subscriptions(user_id, today):
     for sub in repository.list_subscriptions(user_id, "active"):
         first_payment = parse_date(sub["first_payment_date"])
         next_payment = next_payment_date(first_payment, sub["billing_cycle"], today)
+        history = get_price_history(user_id, sub["id"])
+        original_price = history[0]["old_price_cents"] if history else sub["price_cents"]
         result.append({
             "id": sub["id"],
             "name": sub["name"],
@@ -215,6 +248,9 @@ def get_active_subscriptions(user_id, today):
             "days_until_payment": (next_payment - today).days,
             "is_trial": bool(sub["is_trial"]),
             "last_used_date": sub["last_used_date"],
+            "original_price_cents": original_price,
+            "price_change_percent": percent_change(original_price, sub["price_cents"]),
+            "last_price_change": history[-1] if history else None,
         })
     return result
 

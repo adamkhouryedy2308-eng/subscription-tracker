@@ -7,6 +7,7 @@ from subscriptions import service as subscriptions_service
 PAYMENT_SOON_DAYS = 3    # warn when a payment is this many days away or less
 TRIAL_WARNING_DAYS = 7   # warn this many days before a free trial turns into a paid plan
 UNUSED_DAYS = 30         # warn when a subscription has not been used for this many days
+PRICE_RISE_DAYS = 30     # warn about a price rise for this many days after it happened
 
 
 def trial_still_running(sub):
@@ -38,6 +39,25 @@ def budget_alerts(report_rows):
                 "name": row["category"],
                 "amount_cents": row["monthly_cents"],
                 "limit_cents": row["budget_cents"],
+            })
+    return alerts
+
+
+def price_rise_alerts(subscriptions, today):
+    """One alert per subscription whose price went up recently."""
+    alerts = []
+    for sub in subscriptions:
+        change = sub["last_price_change"]
+        if change is None or change["new_price_cents"] <= change["old_price_cents"]:
+            continue
+        if (today - change["changed_date"]).days <= PRICE_RISE_DAYS:
+            alerts.append({
+                "kind": "price_rise",
+                "name": sub["name"],
+                "old_cents": change["old_price_cents"],
+                "amount_cents": change["new_price_cents"],
+                "percent": change["percent"],
+                "date": change["changed_date"],
             })
     return alerts
 
@@ -74,10 +94,11 @@ def unused_alerts(subscriptions, today):
 
 
 def build_alerts(subscriptions, report_rows, today):
-    """Every alert, most urgent kind first: trials, budgets, payments, unused."""
+    """Every alert, most urgent kind first: trials, budgets, price rises, payments, unused."""
     return (
         trial_alerts(subscriptions)
         + budget_alerts(report_rows)
+        + price_rise_alerts(subscriptions, today)
         + payment_alerts(subscriptions)
         + unused_alerts(subscriptions, today)
     )

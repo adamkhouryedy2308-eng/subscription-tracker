@@ -15,6 +15,7 @@ def get_connection():
     """Open a connection where rows can be read by column name."""
     conn = sqlite3.connect(get_db_path())
     conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA foreign_keys = ON")  # SQLite only checks FOREIGN KEYs when asked
     return conn
 
 
