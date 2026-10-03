@@ -68,7 +68,8 @@ def edit_page(subscription_id):
             name = request.form["name"].strip()
             return redirect(url_for("subscriptions.list_page", updated=name))
         return render_form(title, subtitle, request.form, errors), 400
-    return render_form(title, subtitle, service.subscription_to_form(sub), [])
+    history = service.get_price_history(user_id, subscription_id)
+    return render_form(title, subtitle, service.subscription_to_form(sub), [], history)
 
 
 @bp.route("/<int:subscription_id>/cancel", methods=["POST"])
@@ -82,8 +83,8 @@ def cancel(subscription_id):
     return redirect(url_for("subscriptions.list_page", cancelled=sub["name"]))
 
 
-def render_form(title, subtitle, form, errors):
-    """Show the subscription form with the values typed so far and any errors."""
+def render_form(title, subtitle, form, errors, history=None):
+    """Show the subscription form with the values typed so far, any errors and the price history."""
     return render_template(
         "subscriptions/form.html",
         title=title,
@@ -92,4 +93,5 @@ def render_form(title, subtitle, form, errors):
         errors=errors,
         categories=service.CATEGORIES,
         billing_cycles=service.CYCLES_PER_YEAR,
+        history=history or [],
     )

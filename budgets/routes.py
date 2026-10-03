@@ -54,6 +54,7 @@ def alerts_page():
         payment_soon_days=alerts.PAYMENT_SOON_DAYS,
         trial_warning_days=alerts.TRIAL_WARNING_DAYS,
         unused_days=alerts.UNUSED_DAYS,
+        price_rise_days=alerts.PRICE_RISE_DAYS,
     )
 
 

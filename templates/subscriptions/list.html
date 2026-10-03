@@ -60,6 +60,11 @@
         <div class="row-name">
           {{ sub.name }}
           {% if sub.is_trial %}<span class="badge trial">Free trial</span>{% endif %}
+          {% if sub.price_change_percent > 0 %}
+          <span class="badge price-up" title="Was {{ sub.original_price_cents | euros }} when you subscribed">▲ {{ sub.price_change_percent }}%</span>
+          {% elif sub.price_change_percent < 0 %}
+          <span class="badge price-down" title="Was {{ sub.original_price_cents | euros }} when you subscribed">▼ {{ -sub.price_change_percent }}%</span>
+          {% endif %}
         </div>
         <span class="chip">{{ sub.category }}</span>
       </div>

@@ -112,3 +112,29 @@ def test_a_cancelled_subscription_cannot_be_edited(client):
 
 def test_cancelling_a_missing_subscription_is_not_found(client):
     assert client.post("/subscriptions/99/cancel").status_code == 404
+
+
+
+def test_a_price_rise_shows_a_badge_and_a_price_history(client):
+    sub_id = add_netflix(client)
+    client.post(f"/subscriptions/{sub_id}/edit", data=dict(NETFLIX, price="15.99"))
+
+    page = client.get("/subscriptions/").get_data(as_text=True)
+    assert "▲ 19%" in page
+    assert "Was €13.49 when you subscribed" in page
+
+    edit_page = client.get(f"/subscriptions/{sub_id}/edit").get_data(as_text=True)
+    assert "Price history" in edit_page
+    assert "€13.49 → <strong>€15.99</strong>" in edit_page
+
+
+def test_a_price_drop_shows_a_green_badge(client):
+    sub_id = add_netflix(client)
+    client.post(f"/subscriptions/{sub_id}/edit", data=dict(NETFLIX, price="12.14"))
+    page = client.get("/subscriptions/").get_data(as_text=True)
+    assert "▼ 10%" in page
+    assert "price-down" in client.get(f"/subscriptions/{sub_id}/edit").get_data(as_text=True)
+
+
+def test_the_add_page_has_no_price_history(client):
+    assert "Price history" not in client.get("/subscriptions/new").get_data(as_text=True)

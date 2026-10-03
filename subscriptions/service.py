@@ -183,6 +183,7 @@ def get_price_history(user_id, subscription_id):
             "old_price_cents": change["old_price_cents"],
             "new_price_cents": change["new_price_cents"],
             "changed_date": parse_date(change["changed_date"]),
+            "percent": percent_change(change["old_price_cents"], change["new_price_cents"]),
         })
     return history
 

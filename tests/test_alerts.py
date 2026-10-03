@@ -8,7 +8,7 @@ USER_ID = 1
 
 
 def sub(name="Netflix", days=10, is_trial=False, trial_started=False, last_used=None,
-        price_cents=1349, category="Entertainment"):
+        price_cents=1349, category="Entertainment", price_change=None):
     """A subscription as get_active_subscriptions() returns it, with its next payment in `days` days."""
     next_payment = TODAY + timedelta(days=days)
     first_payment = next_payment
@@ -25,7 +25,15 @@ def sub(name="Netflix", days=10, is_trial=False, trial_started=False, last_used=
         "days_until_payment": days,
         "is_trial": is_trial,
         "last_used_date": last_used,
+        "last_price_change": price_change,
     }
+
+
+def change(old, new, days_ago):
+    """A price change as the seam returns it, made `days_ago` days before TODAY."""
+    return {"old_price_cents": old, "new_price_cents": new,
+            "changed_date": TODAY - timedelta(days=days_ago),
+            "percent": round((new - old) * 100 / old)}
 
 
 # --- Free trials -----------------------------------------------------------------
@@ -104,3 +112,30 @@ def test_get_alerts_reads_the_users_own_data(temp_db):
     kinds = [a["kind"] for a in alerts.get_alerts(USER_ID, TODAY)]
     assert kinds == ["over_budget", "payment_soon", "unused"]
     assert alerts.get_alerts(2, TODAY) == []
+
+
+# --- Price rises ---------------------------------------------------------------------
+
+def test_price_rise_in_the_last_30_days_gives_an_alert():
+    result = alerts.price_rise_alerts([sub("Netflix", price_change=change(1349, 1599, 30))], TODAY)
+    assert result == [{"kind": "price_rise", "name": "Netflix", "old_cents": 1349, "amount_cents": 1599,
+                       "percent": 19, "date": TODAY - timedelta(days=30)}]
+
+
+def test_old_price_rises_drops_and_no_change_give_no_alert():
+    subscriptions = [
+        sub("Netflix", price_change=change(1349, 1599, 31)),
+        sub("Spotify", price_change=change(1099, 999, 2)),
+        sub("Gym"),
+    ]
+    assert alerts.price_rise_alerts(subscriptions, TODAY) == []
+
+
+def test_price_rise_comes_after_budgets_and_before_payments():
+    subscriptions = [
+        sub("Netflix", days=2, price_cents=2500, price_change=change(2000, 2500, 1)),
+        sub("Disney+", days=5, is_trial=True),
+    ]
+    rows = service.build_report(subscriptions, {"Entertainment": 2000})
+    kinds = [a["kind"] for a in alerts.build_alerts(subscriptions, rows, TODAY)]
+    assert kinds == ["trial_ending", "over_budget", "price_rise", "payment_soon"]

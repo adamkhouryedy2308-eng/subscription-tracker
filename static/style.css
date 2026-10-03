@@ -716,6 +716,41 @@ svg {
 .alert-over_budget { --tone: var(--danger); }
 .alert-payment_soon { --tone: var(--brand); }
 .alert-unused { --tone: var(--muted); }
+.alert-price_rise { --tone: var(--danger); }
+
+.badge.price-up {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.badge.price-down {
+  background: var(--success-soft);
+  color: var(--success);
+}
+
+.history-card {
+  max-width: 640px;
+  margin-top: 20px;
+  padding: 22px 28px;
+}
+
+.history-card h2 {
+  margin-bottom: 8px;
+  font-size: 1.1rem;
+}
+
+.history-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.history-row:last-child {
+  border-bottom: none;
+}
 
 .alert-icon {
   display: grid;

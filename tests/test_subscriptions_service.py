@@ -248,7 +248,7 @@ def test_editing_the_price_saves_a_price_change(temp_db):
     form["price"] = "15.99"
     service.update_subscription(USER_ID, new_id, form, TODAY)
     history = service.get_price_history(USER_ID, new_id)
-    assert history == [{"old_price_cents": 1349, "new_price_cents": 1599, "changed_date": TODAY}]
+    assert history == [{"old_price_cents": 1349, "new_price_cents": 1599, "changed_date": TODAY, "percent": 19}]
 
 
 def test_editing_without_changing_the_price_saves_no_price_change(temp_db):
@@ -285,7 +285,8 @@ def test_seam_shares_the_original_price_and_the_last_change(temp_db):
     sub = service.get_active_subscriptions(USER_ID, TODAY)[0]
     assert sub["original_price_cents"] == 1349
     assert sub["price_change_percent"] == 19
-    assert sub["last_price_change"] == {"old_price_cents": 1499, "new_price_cents": 1599, "changed_date": TODAY}
+    assert sub["last_price_change"] == {"old_price_cents": 1499, "new_price_cents": 1599,
+                                        "changed_date": TODAY, "percent": 7}
 
 
 def test_seam_without_price_changes(temp_db):
