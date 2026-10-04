@@ -152,7 +152,10 @@ bank statement import (people cannot type in what they have forgotten), the
 alerts engine with price history (price rises and trials go unnoticed) and
 the spending calculator with budgets. Login was first left out and then added
 on 2026-10-01, because the Student Union scenario means many users share one
-app.
+app. It uses Werkzeug's salted password hashing (which comes with Flask) and
+Flask's signed session cookie. The Flask-Login extension was rejected because
+it adds a package for about ten lines of code, and "Sign in with Google"
+because it needs keys set up by hand, which would break the one-command setup.
 
 Considered and **not built**:
 
