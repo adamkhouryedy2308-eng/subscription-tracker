@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+{% block title %}Import from bank · SubTrack{% endblock %}
+
+{% block content %}
+<header class="page-head">
+  <div>
+    <h1>Import from your bank</h1>
+    <p class="subtitle">Upload your bank statement and SubTrack finds the payments that repeat.</p>
+  </div>
+</header>
+
+{% if errors %}
+<div class="notice error">
+  <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v6"/><path d="M12 16.5v.5"/></svg>
+  <span>{{ errors[0] }}</span>
+</div>
+{% endif %}
+
+<section class="card import-card">
+  <p class="privacy-note">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
+    <span>The file is read once and never saved. Only the subscriptions you confirm are stored.</span>
+  </p>
+  <form method="post" enctype="multipart/form-data" class="import-form">
+    <input type="file" name="statement" accept=".csv" required>
+    <button type="submit" class="button">Find subscriptions</button>
+  </form>
+  <p class="muted date">
+    A CSV export with the columns Date, Description and Amount. About 6 months works best.
+    To try it, use <code>sample_data/bank_statement_example.csv</code> from the project.
+  </p>
+</section>
+
+{% if suggestions is not none %}
+<h2 class="import-summary">
+  Found {{ suggestions | length }} subscription{% if suggestions | length != 1 %}s{% endif %}
+  <span class="muted date">in {{ payment_count }} payments{% if skipped %} · {{ skipped }} rows could not be read{% endif %}</span>
+</h2>
+
+{% if suggestions %}
+<form method="post" action="{{ url_for('subscriptions.confirm_import') }}" class="card">
+  <input type="hidden" name="count" value="{{ suggestions | length }}">
+  {% for s in suggestions %}
+  {% set category_class = s.category | lower | replace(" & ", "-") | replace(" ", "-") %}
+  <div class="row import-row cat-{{ category_class }} {% if s.already_tracked %}tracked{% endif %}">
+    {% if s.already_tracked %}
+    <span></span>
+    {% else %}
+    <input type="checkbox" name="add_{{ loop.index0 }}" checked aria-label="Add {{ s.name }}">
+    <input type="hidden" name="name_{{ loop.index0 }}" value="{{ s.name }}">
+    <input type="hidden" name="price_{{ loop.index0 }}" value="{{ '%.2f' | format(s.amount_cents / 100) }}">
+    <input type="hidden" name="cycle_{{ loop.index0 }}" value="{{ s.billing_cycle }}">
+    <input type="hidden" name="date_{{ loop.index0 }}" value="{{ s.last_payment_date.isoformat() }}">
+    {% endif %}
+
+    <div class="row-main">
+      <span class="avatar">{{ s.name[0] | upper }}</span>
+      <div>
+        <div class="row-name">
+          {{ s.name }}
+          {% if s.already_tracked %}<span class="badge trial">Already in your list</span>{% endif %}
+        </div>
+        <span class="muted date">{{ s.bank_text }}</span>
+      </div>
+    </div>
+
+    <div class="row-cell">
+      {% if s.already_tracked %}
+      <span class="chip">{{ s.category }}</span>
+      {% else %}
+      <select name="category_{{ loop.index0 }}" aria-label="Category for {{ s.name }}">
+        {% for category in categories %}
+        <option value="{{ category }}" {% if category == s.category %}selected{% endif %}>{{ category }}</option>
+        {% endfor %}
+      </select>
+      {% endif %}
+    </div>
+
+    <div class="row-cell strong">
+      {{ s.amount_cents | euros }}
+      <span class="muted date">billed {{ s.billing_cycle }}</span>
+    </div>
+
+    <div class="row-cell">
+      <span>Seen {{ s.count }} times</span>
+      <span class="muted date">last on {{ s.last_payment_date.strftime("%d %b %Y") }}</span>
+    </div>
+  </div>
+  {% endfor %}
+  <div class="import-actions">
+    <button type="submit" class="button">Add selected subscriptions</button>
+  </div>
+</form>
+{% else %}
+<section class="card empty">
+  <h2>No repeating payments found</h2>
+  <p>A subscription needs at least 3 payments with a regular rhythm. Try a statement that covers more months.</p>
+</section>
+{% endif %}
+{% endif %}
+{% endblock %}

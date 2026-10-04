@@ -3,7 +3,7 @@ from datetime import date
 
 from flask import Blueprint, abort, redirect, render_template, request, session, url_for
 
-from subscriptions import service
+from subscriptions import bank_import, service
 
 bp = Blueprint("subscriptions", __name__, url_prefix="/subscriptions")
 
@@ -12,6 +12,7 @@ NOTICES = {
     "added": "was added to your subscriptions.",
     "updated": "was updated.",
     "cancelled": "was cancelled. You can still see it under Cancelled.",
+    "imported": "subscriptions were added from your bank statement.",
 }
 
 
@@ -95,3 +96,63 @@ def render_form(title, subtitle, form, errors, history=None):
         billing_cycles=service.CYCLES_PER_YEAR,
         history=history or [],
     )
+
+
+@bp.route("/import", methods=["GET", "POST"])
+def import_page():
+    """GET shows the upload form; POST reads the bank statement and shows what was found.
+
+    The file is only read in memory: neither the file nor its payments are saved.
+    """
+    if request.method == "GET":
+        return render_template("subscriptions/import.html", suggestions=None, errors=[])
+
+    file = request.files.get("statement")
+    if file is None or not file.filename:
+        return import_error("Choose a CSV file from your bank first.")
+    if not file.filename.lower().endswith(".csv"):
+        return import_error("The file must be a .csv export from your bank.")
+    try:
+        text = file.read().decode("utf-8-sig")
+        payments, skipped = bank_import.read_statement(text)
+    except UnicodeDecodeError:
+        return import_error("The file could not be read. Export it from your bank as CSV.")
+    except ValueError as error:
+        return import_error(str(error))
+
+    user_id = session["user_id"]
+    tracked = [sub["name"] for sub in service.get_active_subscriptions(user_id, date.today())]
+    return render_template(
+        "subscriptions/import.html",
+        suggestions=bank_import.find_recurring(payments, tracked),
+        payment_count=len(payments),
+        skipped=skipped,
+        categories=service.CATEGORIES,
+        errors=[],
+    )
+
+
+@bp.route("/import/confirm", methods=["POST"])
+def confirm_import():
+    """Add the suggestions the user ticked, checked by the same validate() as the add form."""
+    user_id = session["user_id"]
+    added = 0
+    for i in range(int(request.form.get("count", 0))):
+        if request.form.get(f"add_{i}") != "on":
+            continue
+        form = {
+            "name": request.form.get(f"name_{i}", ""),
+            "category": request.form.get(f"category_{i}", ""),
+            "price": request.form.get(f"price_{i}", ""),
+            "billing_cycle": request.form.get(f"cycle_{i}", ""),
+            "first_payment_date": request.form.get(f"date_{i}", ""),
+        }
+        new_id, errors = service.create_subscription(user_id, form, date.today())
+        if not errors:
+            added += 1
+    return redirect(url_for("subscriptions.list_page", imported=added))
+
+
+def import_error(message):
+    """Show the upload form again with one error message."""
+    return render_template("subscriptions/import.html", suggestions=None, errors=[message]), 400
