@@ -73,11 +73,11 @@ subscriptions.
 - Cancelled subscriptions are kept (not deleted) and show how much cancelling
   them saves per year.
 - **Price history:** every price change is saved, the list shows "▲ 19%" since
-  you subscribed, and the edit page shows the history (ADR-5).
+  you subscribed, and the edit page shows the history (ADR-3).
 - **Bank statement import:** upload a CSV export from your bank and SubTrack
   finds the payments that repeat with a regular rhythm and a similar amount,
   then suggests them as subscriptions. The file and its payments are never
-  stored; only the subscriptions you confirm are saved (ADR-6).
+  stored; only the subscriptions you confirm are saved (ADR-5).
 
 ### Domain 2 – Budgets & Alerts (`budgets/`)
 
@@ -85,7 +85,7 @@ subscriptions.
   and its share of the total.
 - **Budgets:** a monthly budget per category with a green, amber (80% or more)
   or red (over) bar. Only the limits are stored; spending is worked out live
-  (ADR-4).
+  (ADR-3).
 - **Alerts** with a counter in the sidebar: free trial ending (7 days), over
   budget, price went up (last 30 days), payment soon (3 days) and not used for
   30 days.
@@ -94,7 +94,8 @@ subscriptions.
 
 A supporting part, not a third feature domain: sign up, log in and log out.
 Passwords are stored only as a salted hash, every page except log in and sign
-up needs a login, and each user only sees their own data (ADR-3).
+up needs a login, and each user only sees their own data (`user_id` in
+every query, ADR-3).
 
 ## How the parts fit together
 
@@ -124,8 +125,9 @@ tests/            unit and page tests (pytest)
 
 ## Decisions and AI use
 
-- **[ADR.md](ADR.md)** – six architecture decisions with their context,
-  alternatives and consequences.
+- **[ADR.md](ADR.md)** – the five architecture decisions the brief asks for
+  (framework, domains, data model, testing, and one thing not built), each
+  with its context, alternatives and consequences.
 - **[AI_USAGE.md](AI_USAGE.md)** – every use of AI (Claude Code), whether it
   was accepted or changed, and an explanation in my own words.
 
@@ -150,7 +152,10 @@ bank statement import (people cannot type in what they have forgotten), the
 alerts engine with price history (price rises and trials go unnoticed) and
 the spending calculator with budgets. Login was first left out and then added
 on 2026-10-01, because the Student Union scenario means many users share one
-app (ADR-3).
+app. It uses Werkzeug's salted password hashing (which comes with Flask) and
+Flask's signed session cookie. The Flask-Login extension was rejected because
+it adds a package for about ten lines of code, and "Sign in with Google"
+because it needs keys set up by hand, which would break the one-command setup.
 
 Considered and **not built**:
 
