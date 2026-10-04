@@ -790,6 +790,67 @@ svg {
   font-size: 0.85rem;
 }
 
+/* ---------- Bank import ---------- */
+.import-card {
+  padding: 28px;
+}
+
+.import-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px;
+  margin-top: 18px;
+}
+
+input[type="file"] {
+  flex: 1;
+  min-width: 220px;
+  padding: 10px;
+  border: 1px dashed var(--border);
+  border-radius: 10px;
+  background: var(--surface-soft);
+  color: var(--muted);
+  font: inherit;
+}
+
+.privacy-note {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.privacy-note svg {
+  color: var(--success);
+}
+
+.import-summary {
+  margin: 28px 0 14px;
+}
+
+.row.import-row {
+  grid-template-columns: 28px 2fr 1.4fr 1.2fr 1.2fr;
+}
+
+.import-row input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--brand);
+}
+
+.import-row.tracked {
+  opacity: 0.6;
+}
+
+.import-actions {
+  display: flex;
+  justify-content: flex-end;
+  padding: 16px 22px;
+}
+
 /* ---------- Empty state ---------- */
 .empty {
   padding: 56px 24px;
@@ -1065,7 +1126,8 @@ select:focus {
   }
 
   .row.row-cancelled,
-  .row.budget-row {
+  .row.budget-row,
+  .row.import-row {
     grid-template-columns: 1fr 1fr;
   }
 

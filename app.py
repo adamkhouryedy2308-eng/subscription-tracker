@@ -28,6 +28,8 @@ def create_app():
     app.secret_key = get_secret_key()
     # The login cookie is not sent when another website submits a form to SubTrack.
     app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+    # Uploaded bank statements may be at most 1 MB; bigger files get "413 Too Large".
+    app.config["MAX_CONTENT_LENGTH"] = 1024 * 1024
 
     # Each part of the app hands in its own table; db.py never changes.
     db.init_db([

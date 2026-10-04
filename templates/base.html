@@ -28,6 +28,11 @@
           <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v8"/><path d="M8 12h8"/></svg>
           Add subscription
         </a>
+        <a class="nav-link {% if request.endpoint == 'subscriptions.import_page' %}active{% endif %}"
+           href="{{ url_for('subscriptions.import_page') }}">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
+          Import from bank
+        </a>
         <a class="nav-link {% if request.endpoint == 'budgets.budgets_page' %}active{% endif %}"
            href="{{ url_for('budgets.budgets_page') }}">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v9h9"/><circle cx="12" cy="12" r="9"/></svg>
