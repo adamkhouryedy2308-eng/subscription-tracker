@@ -1,7 +1,6 @@
 from datetime import date, timedelta
 
 from budgets import alerts, service
-from subscriptions import service as subscriptions_service
 
 TODAY = date(2026, 10, 3)
 USER_ID = 1
@@ -103,15 +102,15 @@ def test_no_subscriptions_means_no_alerts():
     assert alerts.build_alerts([], [], TODAY) == []
 
 
-def test_get_alerts_reads_the_users_own_data(temp_db):
-    form = {"name": "Netflix", "category": "Entertainment", "price": "13.49", "billing_cycle": "monthly",
-            "first_payment_date": "2026-10-05", "last_used_date": "2026-08-01"}
-    subscriptions_service.create_subscription(USER_ID, form, TODAY)
+def test_get_alerts_uses_the_users_own_budgets(temp_db):
+    subscriptions = [sub("Netflix", days=2, last_used="2026-08-01")]
     service.set_budget(USER_ID, {"category": "Entertainment", "amount": "10"})
 
-    kinds = [a["kind"] for a in alerts.get_alerts(USER_ID, TODAY)]
+    kinds = [a["kind"] for a in alerts.get_alerts(USER_ID, subscriptions, TODAY)]
     assert kinds == ["over_budget", "payment_soon", "unused"]
-    assert alerts.get_alerts(2, TODAY) == []
+    other_user = 2
+    kinds = [a["kind"] for a in alerts.get_alerts(other_user, subscriptions, TODAY)]
+    assert kinds == ["payment_soon", "unused"]
 
 
 # --- Price rises ---------------------------------------------------------------------

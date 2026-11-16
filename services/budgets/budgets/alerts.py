@@ -2,7 +2,6 @@
 from datetime import date
 
 from budgets import repository, service
-from subscriptions import service as subscriptions_service
 
 PAYMENT_SOON_DAYS = 3    # warn when a payment is this many days away or less
 TRIAL_WARNING_DAYS = 7   # warn this many days before a free trial turns into a paid plan
@@ -104,8 +103,7 @@ def build_alerts(subscriptions, report_rows, today):
     )
 
 
-def get_alerts(user_id, today):
-    """The alerts for one user. Subscriptions come only through the seam (ADR-2)."""
-    subscriptions = subscriptions_service.get_active_subscriptions(user_id, today)
+def get_alerts(user_id, subscriptions, today):
+    """The alerts for one user, from their subscriptions (fetched across the seam) and budgets."""
     report_rows = service.build_report(subscriptions, repository.list_budgets(user_id))
     return build_alerts(subscriptions, report_rows, today)
