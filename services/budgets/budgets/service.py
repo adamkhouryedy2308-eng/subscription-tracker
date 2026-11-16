@@ -1,6 +1,20 @@
 """Rules for budgets: what each category costs per month and how it compares to its budget."""
 from budgets import repository
-from subscriptions import service as subscriptions_service
+
+# The same 10 categories as the Subscriptions service. Copied on purpose: Budgets
+# must keep working (saving and checking budgets) even when Subscriptions is down.
+CATEGORIES = [
+    "Entertainment",
+    "Music",
+    "AI Tools",
+    "Health & Fitness",
+    "Cloud & Software",
+    "News & Magazines",
+    "Education",
+    "Food & Delivery",
+    "Phone & Internet",
+    "Other",
+]
 
 NEAR_LIMIT_PERCENT = 80  # from 80% of a budget, the category is shown as "close to the limit"
 MAX_BUDGET_CENTS = 1000000  # 10,000 euros
@@ -17,7 +31,7 @@ def validate_budget(form):
     errors = []
 
     category = form.get("category", "")
-    if category not in subscriptions_service.CATEGORIES:
+    if category not in CATEGORIES:
         errors.append("Choose a category from the list.")
 
     cents = None
@@ -43,6 +57,11 @@ def set_budget(user_id, form):
 def remove_budget(user_id, category):
     """Remove the budget for one category."""
     repository.remove_budget(user_id, category)
+
+
+def list_budgets(user_id):
+    """This user's budgets as {category: monthly limit in cents}. Needs no subscription data."""
+    return repository.list_budgets(user_id)
 
 
 def spending_by_category(subscriptions):
@@ -93,7 +112,7 @@ def build_report(subscriptions, budgets):
         total_monthly += totals["monthly_cents"]
 
     rows = []
-    for category in subscriptions_service.CATEGORIES:
+    for category in CATEGORIES:
         if category not in spending and category not in budgets:
             continue
         totals = spending.get(category, {"monthly_cents": 0, "yearly_cents": 0, "count": 0})
@@ -134,12 +153,11 @@ def summarise_report(rows):
     }
 
 
-def get_budget_report(user_id, today):
+def get_budget_report(user_id, subscriptions):
     """The budgets page for one user.
 
-    Subscription data comes ONLY from get_active_subscriptions(), the one
-    function the Subscriptions domain shares (see ADR-2).
+    The subscriptions come from the Subscriptions service over HTTP
+    (subscriptions_client.py), the one way in across the seam (ADR-2, ADR-6).
     """
-    subscriptions = subscriptions_service.get_active_subscriptions(user_id, today)
     budgets = repository.list_budgets(user_id)
     return build_report(subscriptions, budgets)

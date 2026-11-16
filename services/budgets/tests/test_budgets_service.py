@@ -3,7 +3,6 @@ from datetime import date
 import pytest
 
 from budgets import service
-from subscriptions import service as subscriptions_service
 
 TODAY = date(2026, 10, 2)
 USER_ID = 1
@@ -47,21 +46,19 @@ def test_invalid_budget_forms_give_a_clear_error(form, error):
 def test_set_budget_saves_it_and_saving_again_replaces_it(temp_db):
     assert service.set_budget(USER_ID, {"category": "Music", "amount": "15"}) == []
     assert service.set_budget(USER_ID, {"category": "Music", "amount": "20"}) == []
-    report = service.get_budget_report(USER_ID, TODAY)
-    assert len(report) == 1
-    assert report[0]["budget_cents"] == 2000
+    assert service.list_budgets(USER_ID) == {"Music": 2000}
 
 
 def test_set_budget_with_errors_saves_nothing(temp_db):
     errors = service.set_budget(USER_ID, {"category": "Music", "amount": "free"})
     assert errors == ["Budget must be a number, like 25 or 12.50."]
-    assert service.get_budget_report(USER_ID, TODAY) == []
+    assert service.list_budgets(USER_ID) == {}
 
 
 def test_remove_budget(temp_db):
     service.set_budget(USER_ID, {"category": "Music", "amount": "15"})
     service.remove_budget(USER_ID, "Music")
-    assert service.get_budget_report(USER_ID, TODAY) == []
+    assert service.list_budgets(USER_ID) == {}
 
 
 # --- The spending calculator --------------------------------------------------------
@@ -122,18 +119,16 @@ def test_summarise_an_empty_report():
                        "budget_total_cents": 0, "over_budget": []}
 
 
-# --- Reading subscriptions through the seam (ADR-2) ------------------------------------
+# --- The report for one user ----------------------------------------------------------
 
-def test_report_uses_the_users_own_subscriptions_and_budgets(temp_db):
-    form = {"name": "Netflix", "category": "Entertainment", "price": "13.49",
-            "billing_cycle": "monthly", "first_payment_date": "2026-01-15"}
-    subscriptions_service.create_subscription(USER_ID, form, TODAY)
+def test_report_uses_the_users_own_budgets(temp_db):
+    subscriptions = [sub("Entertainment", 1349)]
     service.set_budget(USER_ID, {"category": "Entertainment", "amount": "10"})
 
-    rows = service.get_budget_report(USER_ID, TODAY)
+    rows = service.get_budget_report(USER_ID, subscriptions)
     assert rows[0]["category"] == "Entertainment"
     assert rows[0]["monthly_cents"] == 1349
     assert rows[0]["status"] == "over"
 
     other_user = 2
-    assert service.get_budget_report(other_user, TODAY) == []
+    assert service.get_budget_report(other_user, subscriptions)[0]["status"] == "none"
