@@ -12,8 +12,14 @@ data/
 htmlcov/
 .pytest_cache/
 
-# Local environment files
+# Local environment files (passwords and keys stay on this laptop, never in Git)
 .env
+
+# Terraform: its downloaded tools, and its "state" files, which contain passwords
+.terraform/
+*.tfstate
+*.tfstate.backup
+*.tfvars
 
 # macOS
 .DS_Store
