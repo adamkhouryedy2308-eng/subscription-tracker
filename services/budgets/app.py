@@ -6,7 +6,6 @@ from flask import Flask, jsonify
 from flask.json.provider import DefaultJSONProvider
 
 import db
-from budgets import repository as budgets_repository
 from budgets.routes import bp as budgets_endpoints
 
 
@@ -29,12 +28,12 @@ def get_secret_key():
 
 
 def create_app():
-    """Build the Flask app and make sure the database is ready."""
+    """Build the Flask app and bring the database up to date (migrations) before serving."""
     app = Flask(__name__)
     app.json = JSONWithDates(app)
     app.config["SECRET_KEY"] = get_secret_key()
 
-    db.init_db([budgets_repository.CREATE_TABLE])
+    db.run_migrations()
     app.register_blueprint(budgets_endpoints)
 
     # Errors are JSON too, so the pages can always read the answer.

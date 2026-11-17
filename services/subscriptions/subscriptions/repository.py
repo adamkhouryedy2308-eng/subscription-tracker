@@ -1,43 +1,19 @@
-"""SQL for the subscriptions table. Only this file reads or writes that table."""
+"""SQL for the subscriptions and price_changes tables. Only this file reads or writes them.
+
+The tables themselves are created by migrations/001_init.sql.
+"""
 import db
-
-CREATE_TABLE = """
-CREATE TABLE IF NOT EXISTS subscriptions (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id INTEGER NOT NULL,
-    name TEXT NOT NULL,
-    category TEXT NOT NULL,
-    price_cents INTEGER NOT NULL CHECK (price_cents >= 0),
-    billing_cycle TEXT NOT NULL
-        CHECK (billing_cycle IN ('weekly', 'monthly', 'quarterly', 'yearly')),
-    first_payment_date TEXT NOT NULL,
-    is_trial INTEGER NOT NULL DEFAULT 0,
-    last_used_date TEXT,
-    status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'cancelled')),
-    cancelled_date TEXT
-)
-"""
-
-CREATE_PRICE_CHANGES_TABLE = """
-CREATE TABLE IF NOT EXISTS price_changes (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    subscription_id INTEGER NOT NULL REFERENCES subscriptions (id),
-    old_price_cents INTEGER NOT NULL,
-    new_price_cents INTEGER NOT NULL,
-    changed_date TEXT NOT NULL
-)
-"""
 
 
 def add_subscription(user_id, sub):
     """Save a new subscription for this user and return its id."""
-    conn = db.get_connection()
-    cursor = conn.execute(
+    return db.insert(
         """
         INSERT INTO subscriptions
             (user_id, name, category, price_cents, billing_cycle,
              first_payment_date, is_trial, last_used_date)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        OUTPUT INSERTED.id
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
         """,
         (
             user_id,
@@ -50,21 +26,16 @@ def add_subscription(user_id, sub):
             sub["last_used_date"],
         ),
     )
-    conn.commit()
-    new_id = cursor.lastrowid
-    conn.close()
-    return new_id
 
 
 def update_subscription(user_id, subscription_id, sub):
     """Save new values over one of this user's subscriptions."""
-    conn = db.get_connection()
-    conn.execute(
+    db.execute(
         """
         UPDATE subscriptions
-        SET name = ?, category = ?, price_cents = ?, billing_cycle = ?,
-            first_payment_date = ?, is_trial = ?, last_used_date = ?
-        WHERE id = ? AND user_id = ?
+        SET name = %s, category = %s, price_cents = %s, billing_cycle = %s,
+            first_payment_date = %s, is_trial = %s, last_used_date = %s
+        WHERE id = %s AND user_id = %s
         """,
         (
             sub["name"],
@@ -78,67 +49,50 @@ def update_subscription(user_id, subscription_id, sub):
             user_id,
         ),
     )
-    conn.commit()
-    conn.close()
 
 
 def cancel_subscription(user_id, subscription_id, cancelled_date):
     """Mark one of this user's active subscriptions as cancelled. The row is kept for the history."""
-    conn = db.get_connection()
-    conn.execute(
+    db.execute(
         """
         UPDATE subscriptions
-        SET status = 'cancelled', cancelled_date = ?
-        WHERE id = ? AND user_id = ? AND status = 'active'
+        SET status = 'cancelled', cancelled_date = %s
+        WHERE id = %s AND user_id = %s AND status = 'active'
         """,
         (cancelled_date, subscription_id, user_id),
     )
-    conn.commit()
-    conn.close()
 
 
 def list_subscriptions(user_id, status="active"):
     """Return this user's subscriptions with the given status, sorted by name."""
-    conn = db.get_connection()
-    rows = conn.execute(
-        "SELECT * FROM subscriptions WHERE user_id = ? AND status = ? ORDER BY name",
+    return db.query(
+        "SELECT * FROM subscriptions WHERE user_id = %s AND status = %s ORDER BY name",
         (user_id, status),
-    ).fetchall()
-    conn.close()
-    return [dict(row) for row in rows]
+    )
 
 
 def get_subscription(user_id, subscription_id):
     """Return one of this user's subscriptions as a dict, or None if it is not theirs or does not exist."""
-    conn = db.get_connection()
-    row = conn.execute(
-        "SELECT * FROM subscriptions WHERE id = ? AND user_id = ?",
+    return db.query_one(
+        "SELECT * FROM subscriptions WHERE id = %s AND user_id = %s",
         (subscription_id, user_id),
-    ).fetchone()
-    conn.close()
-    return dict(row) if row else None
+    )
 
 
 def add_price_change(subscription_id, old_price_cents, new_price_cents, changed_date):
     """Remember that a subscription's price changed."""
-    conn = db.get_connection()
-    conn.execute(
+    db.execute(
         """
         INSERT INTO price_changes (subscription_id, old_price_cents, new_price_cents, changed_date)
-        VALUES (?, ?, ?, ?)
+        VALUES (%s, %s, %s, %s)
         """,
         (subscription_id, old_price_cents, new_price_cents, changed_date),
     )
-    conn.commit()
-    conn.close()
 
 
 def list_price_changes(subscription_id):
     """Every price change of one subscription, oldest first."""
-    conn = db.get_connection()
-    rows = conn.execute(
-        "SELECT * FROM price_changes WHERE subscription_id = ? ORDER BY changed_date, id",
+    return db.query(
+        "SELECT * FROM price_changes WHERE subscription_id = %s ORDER BY changed_date, id",
         (subscription_id,),
-    ).fetchall()
-    conn.close()
-    return [dict(row) for row in rows]
+    )

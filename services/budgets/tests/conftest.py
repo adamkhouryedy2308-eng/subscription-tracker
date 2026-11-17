@@ -1,12 +1,46 @@
+"""Shared test setup: every test that needs the database gets the EMPTY budgets_test database.
+
+Locally, start SQL Server first (docker compose up -d); the password is read from the
+.env file at the repository root. In CI, TEST_DATABASE_URL is set instead.
+"""
+import os
+from urllib.parse import quote
+
 import pytest
 from itsdangerous import URLSafeTimedSerializer
 
 import db
 import subscriptions_client
 from app import create_app
-from budgets import repository as budgets_repository
 
 TEST_SECRET_KEY = "only-for-tests-not-a-real-secret"
+ENV_FILE = os.path.join(os.path.dirname(__file__), "..", "..", "..", ".env")
+
+
+def read_env_file(path):
+    """Read NAME=value lines from a .env file (empty if the file does not exist)."""
+    values = {}
+    if os.path.exists(path):
+        with open(path) as file:
+            for line in file:
+                name, equals, value = line.strip().partition("=")
+                if equals and not name.startswith("#"):
+                    values[name] = value
+    return values
+
+
+def test_database_url():
+    """The test database: TEST_DATABASE_URL if set (CI), otherwise built from the password in .env."""
+    if os.environ.get("TEST_DATABASE_URL"):
+        return os.environ["TEST_DATABASE_URL"]
+    password = read_env_file(ENV_FILE).get("BUDGETS_DB_PASSWORD")
+    if not password:
+        pytest.exit("No database for the tests: create .env and run `docker compose up -d`, "
+                    "or set TEST_DATABASE_URL.")
+    return f"mssql://budgets_user:{quote(password, safe='')}@localhost:1433/budgets_test"
+
+
+test_database_url.__test__ = False  # its name starts with "test", but it is not a test
 
 
 def make_token(user_id, key=TEST_SECRET_KEY):
@@ -19,17 +53,24 @@ def log_in_as(browser, user_id):
     browser.environ_base["HTTP_AUTHORIZATION"] = f"Bearer {make_token(user_id)}"
 
 
-@pytest.fixture
-def temp_db(tmp_path, monkeypatch):
-    """Point DATA_DIR at a fresh temporary folder so tests never touch real data."""
-    monkeypatch.setenv("DATA_DIR", str(tmp_path))
-    db.init_db([budgets_repository.CREATE_TABLE])
+@pytest.fixture(scope="session", autouse=True)
+def fresh_schema():
+    """Once per test run: remove every table and build them again with the migrations."""
+    os.environ["DATABASE_URL"] = test_database_url()
+    for table in ["budgets", "schema_migrations"]:
+        db.execute(f"IF OBJECT_ID('{table}', 'U') IS NOT NULL DROP TABLE {table}")
+    db.run_migrations()
 
 
 @pytest.fixture
-def guest(tmp_path, monkeypatch):
-    """A pretend browser with NO token, talking to a fresh app with its own temporary database."""
-    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+def temp_db():
+    """Empty the budgets table, so the test starts with no budgets."""
+    db.execute("DELETE FROM budgets")
+
+
+@pytest.fixture
+def guest(temp_db, monkeypatch):
+    """A pretend browser with NO token, talking to a fresh app and an empty database."""
     monkeypatch.setenv("SECRET_KEY", TEST_SECRET_KEY)
     return create_app().test_client()
 

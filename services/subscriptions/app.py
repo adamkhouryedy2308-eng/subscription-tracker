@@ -6,9 +6,7 @@ from flask import Flask, jsonify
 from flask.json.provider import DefaultJSONProvider
 
 import db
-from accounts import repository as accounts_repository
 from accounts.routes import bp as accounts_endpoints
-from subscriptions import repository as subscriptions_repository
 from subscriptions.routes import bp as subscriptions_endpoints
 
 
@@ -31,18 +29,14 @@ def get_secret_key():
 
 
 def create_app():
-    """Build the Flask app and make sure the database is ready."""
+    """Build the Flask app and bring the database up to date (migrations) before serving."""
     app = Flask(__name__)
     app.json = JSONWithDates(app)
     app.config["SECRET_KEY"] = get_secret_key()
     # Uploaded bank statements may be at most 1 MB; bigger files get "413 Too Large".
     app.config["MAX_CONTENT_LENGTH"] = 1024 * 1024
 
-    db.init_db([
-        accounts_repository.CREATE_TABLE,
-        subscriptions_repository.CREATE_TABLE,
-        subscriptions_repository.CREATE_PRICE_CHANGES_TABLE,
-    ])
+    db.run_migrations()
 
     app.register_blueprint(accounts_endpoints)
     app.register_blueprint(subscriptions_endpoints)

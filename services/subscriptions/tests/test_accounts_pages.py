@@ -91,14 +91,14 @@ def test_logging_in_with_a_wrong_password_gives_one_general_message(guest):
 
 def test_users_never_see_or_change_each_others_subscriptions(guest):
     ana_token = sign_up(guest, ANA)
-    guest.post("/subscriptions", json=NETFLIX)
+    anas_id = guest.post("/subscriptions", json=NETFLIX).get_json()["id"]
 
     sign_up(guest, BEN)
     assert guest.get("/subscriptions").get_json()["subscriptions"] == []
     assert guest.get("/subscriptions/active").get_json()["subscriptions"] == []
-    assert guest.get("/subscriptions/1").status_code == 404
-    assert guest.put("/subscriptions/1", json=NETFLIX).status_code == 404
-    assert guest.post("/subscriptions/1/cancel").status_code == 404
+    assert guest.get(f"/subscriptions/{anas_id}").status_code == 404
+    assert guest.put(f"/subscriptions/{anas_id}", json=NETFLIX).status_code == 404
+    assert guest.post(f"/subscriptions/{anas_id}/cancel").status_code == 404
 
     log_in_as(guest, ana_token)
     assert guest.get("/subscriptions").get_json()["subscriptions"][0]["name"] == "Netflix"
