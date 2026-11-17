@@ -5,7 +5,7 @@ test starts the real Subscriptions and Budgets & Alerts services as two separate
 programs on this machine, uses them like the browser does, and then stops
 Subscriptions to check that Budgets fails in the designed way.
 
-Run it from the repository root:  pytest tests
+Run it from the repository root, with SQL Server running (docker compose up -d):  pytest
 """
 import json
 import os
@@ -13,13 +13,39 @@ import socket
 import subprocess
 import sys
 import time
+import uuid
 from urllib.error import HTTPError, URLError
+from urllib.parse import quote
 from urllib.request import Request, urlopen
 
 import pytest
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SECRET_KEY = "only-for-tests-not-a-real-secret"   # both services get the SAME key
+
+
+def read_env_file():
+    """Read NAME=value lines from the .env file at the repository root."""
+    values = {}
+    path = os.path.join(ROOT, ".env")
+    if os.path.exists(path):
+        with open(path) as file:
+            for line in file:
+                name, equals, value = line.strip().partition("=")
+                if equals and not name.startswith("#"):
+                    values[name] = value
+    return values
+
+
+def database_url(service):
+    """Each service's own TEST database, with its own login (from CI's variables or from .env)."""
+    variable = f"{service.upper()}_TEST_DATABASE_URL"
+    if os.environ.get(variable):
+        return os.environ[variable]
+    password = read_env_file().get(f"{service.upper()}_DB_PASSWORD")
+    if not password:
+        pytest.exit("No database: create .env and run `docker compose up -d`, or set " + variable)
+    return f"mssql://{service}_user:{quote(password, safe='')}@localhost:1433/{service}_test"
 
 
 def free_port():
@@ -29,9 +55,9 @@ def free_port():
         return s.getsockname()[1]
 
 
-def start_service(name, port, data_dir, extra_env=None):
+def start_service(name, port, extra_env=None):
     """Start one service with `python app.py`, configured only through environment variables."""
-    env = dict(os.environ, SECRET_KEY=SECRET_KEY, PORT=str(port), DATA_DIR=str(data_dir))
+    env = dict(os.environ, SECRET_KEY=SECRET_KEY, PORT=str(port), DATABASE_URL=database_url(name))
     env.update(extra_env or {})
     process = subprocess.Popen([sys.executable, "app.py"], cwd=os.path.join(ROOT, "services", name),
                                env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -39,7 +65,7 @@ def start_service(name, port, data_dir, extra_env=None):
     return process
 
 
-def wait_until_answering(base_url, seconds=15):
+def wait_until_answering(base_url, seconds=60):
     """Wait until the service answers anything at all (401 is fine: it means it is up)."""
     deadline = time.time() + seconds
     while time.time() < deadline:
@@ -67,11 +93,11 @@ def call(method, url, body=None, token=None):
 
 
 @pytest.fixture
-def system(tmp_path):
-    """Both services, each with its own empty data folder, Budgets pointing at Subscriptions."""
+def system():
+    """Both services, each with its own database and login, Budgets pointing at Subscriptions."""
     subs_port, budgets_port = free_port(), free_port()
-    subscriptions = start_service("subscriptions", subs_port, tmp_path / "subscriptions")
-    budgets = start_service("budgets", budgets_port, tmp_path / "budgets", {
+    subscriptions = start_service("subscriptions", subs_port)
+    budgets = start_service("budgets", budgets_port, {
         "SUBSCRIPTIONS_URL": f"http://127.0.0.1:{subs_port}",
         "SUBSCRIPTIONS_TIMEOUT_S": "2",
     })
@@ -85,9 +111,10 @@ def system(tmp_path):
 def test_budgets_reads_subscriptions_across_the_seam_and_survives_when_it_is_down(system):
     subs, budgets = system["subscriptions"], system["budgets"]
 
-    # 1. Sign up on Subscriptions: it gives back a token.
+    # 1. Sign up on Subscriptions (a new email every run): it gives back a token.
+    email = f"seam-{uuid.uuid4().hex[:8]}@example.com"
     status, answer = call("POST", subs + "/register", {
-        "email": "seam@example.com", "password": "secret-pass", "confirm_password": "secret-pass"})
+        "email": email, "password": "secret-pass", "confirm_password": "secret-pass"})
     assert status == 201
     token = answer["token"]
 
