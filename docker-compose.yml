@@ -1,6 +1,8 @@
 name: subtrack
 
-# For now only the database. The two services and the UI are added in a later step.
+# The whole system on one laptop: `docker compose up --build`.
+# Passwords and the secret key come from .env (git-ignored), never from this file.
+# Ports on this laptop: Subscriptions http://localhost:8001, Budgets http://localhost:8002.
 services:
   sqlserver:
     image: mcr.microsoft.com/mssql/server:2022-latest
@@ -36,6 +38,31 @@ services:
     entrypoint: ["/bin/bash", "-c"]
     command:
       - /opt/mssql-tools18/bin/sqlcmd -C -b -S sqlserver -U sa -P "$$SA_PASSWORD" -i /init.sql -v SUBSCRIPTIONS_DB_PASSWORD="$$SUBSCRIPTIONS_DB_PASSWORD" BUDGETS_DB_PASSWORD="$$BUDGETS_DB_PASSWORD"
+
+  subscriptions:
+    build: ./services/subscriptions
+    depends_on:
+      db-init:
+        condition: service_completed_successfully   # its database and login exist first
+    environment:
+      # Its OWN database, with its OWN login. "sqlserver" is the database container's name.
+      DATABASE_URL: mssql://subscriptions_user:${SUBSCRIPTIONS_DB_PASSWORD}@sqlserver:1433/subscriptions
+      SECRET_KEY: ${SECRET_KEY}                     # stamps login tokens
+    ports:
+      - "8001:8000"                                 # laptop port 8001 -> container port 8000
+
+  budgets:
+    build: ./services/budgets
+    depends_on:
+      db-init:
+        condition: service_completed_successfully
+      # No wait for Subscriptions on purpose: Budgets must start and degrade if it is down.
+    environment:
+      DATABASE_URL: mssql://budgets_user:${BUDGETS_DB_PASSWORD}@sqlserver:1433/budgets
+      SECRET_KEY: ${SECRET_KEY}                     # the same key, to check the tokens' stamp
+      SUBSCRIPTIONS_URL: http://subscriptions:8000  # how Budgets finds Subscriptions (no hardcoded host)
+    ports:
+      - "8002:8000"
 
 volumes:
   sqldata:

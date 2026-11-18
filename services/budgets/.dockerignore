@@ -1,0 +1,10 @@
+# Files Docker never sends into the build, even by accident.
+# The Dockerfile already copies only what it needs; this is a second safety net.
+.env
+**/__pycache__
+.pytest_cache/
+tests/
+data/
+sample_data/
+requirements-dev.txt
+pytest.ini
