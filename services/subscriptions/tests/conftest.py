@@ -46,7 +46,7 @@ test_database_url.__test__ = False  # its name starts with "test", but it is not
 def fresh_schema():
     """Once per test run: remove every table and build them again with the migrations."""
     os.environ["DATABASE_URL"] = test_database_url()
-    for table in TABLES + ["schema_migrations"]:
+    for table in TABLES + ["health_check", "schema_migrations"]:
         db.execute(f"IF OBJECT_ID('{table}', 'U') IS NOT NULL DROP TABLE {table}")
     db.run_migrations()
 

@@ -9,7 +9,7 @@ from accounts import service
 bp = Blueprint("accounts", __name__)
 
 # Endpoints a visitor may use without logging in. Every other one needs a token.
-PUBLIC_ENDPOINTS = ["accounts.register", "accounts.login"]
+PUBLIC_ENDPOINTS = ["accounts.register", "accounts.login", "health"]
 
 
 @bp.before_app_request

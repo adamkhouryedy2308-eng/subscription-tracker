@@ -1,8 +1,9 @@
 """The Subscriptions service: accounts and subscriptions, answering in JSON."""
 import os
+import time
 from datetime import date
 
-from flask import Flask, jsonify
+from flask import Flask, g, jsonify, request
 from flask.json.provider import DefaultJSONProvider
 
 import db
@@ -37,6 +38,30 @@ def create_app():
     app.config["MAX_CONTENT_LENGTH"] = 1024 * 1024
 
     db.run_migrations()
+
+    # One log line per request on stdout, e.g. "GET /budgets 200 12.3ms".
+    # Only the method and path are logged: never tokens, passwords or data.
+    @app.before_request
+    def start_timer():
+        g.started = time.perf_counter()
+
+    @app.after_request
+    def log_request(response):
+        duration_ms = (time.perf_counter() - g.get("started", time.perf_counter())) * 1000
+        print(f"{request.method} {request.path} {response.status_code} {duration_ms:.1f}ms", flush=True)
+        return response
+
+    @app.route("/health")
+    def health():
+        """Is THIS service working? 200 if it can use its own database, 503 if not.
+
+        It does not check the other service: each service reports only its own health.
+        GIT_SHA is set when the Docker image is built, so we can see which version runs.
+        """
+        version = os.environ.get("GIT_SHA", "dev")
+        if db.database_works():
+            return jsonify(status="ok", db="ok", version=version)
+        return jsonify(status="error", db="unavailable", version=version), 503
 
     app.register_blueprint(accounts_endpoints)
     app.register_blueprint(subscriptions_endpoints)
