@@ -57,7 +57,7 @@ def log_in_as(browser, user_id):
 def fresh_schema():
     """Once per test run: remove every table and build them again with the migrations."""
     os.environ["DATABASE_URL"] = test_database_url()
-    for table in ["budgets", "schema_migrations"]:
+    for table in ["budgets", "health_check", "schema_migrations"]:
         db.execute(f"IF OBJECT_ID('{table}', 'U') IS NOT NULL DROP TABLE {table}")
     db.run_migrations()
 

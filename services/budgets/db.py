@@ -78,6 +78,24 @@ def insert(sql, params=()):
         return new_id
 
 
+def database_works():
+    """True if this service can write to and read from its own database (used by GET /health).
+
+    It writes the current time into the one row of health_check (migration 002)
+    and reads it back. Any database error means "not working", never a crash.
+    """
+    try:
+        with connect() as conn:
+            cursor = conn.cursor()
+            cursor.execute("UPDATE health_check SET checked_at = SYSUTCDATETIME() WHERE id = 1")
+            cursor.execute("SELECT checked_at FROM health_check WHERE id = 1")
+            row = cursor.fetchone()
+            conn.commit()
+        return row is not None
+    except pymssql.Error:
+        return False
+
+
 def run_migrations(folder=MIGRATIONS_DIR):
     """Apply the numbered .sql files in `folder` that have not run yet, in order, each exactly once.
 

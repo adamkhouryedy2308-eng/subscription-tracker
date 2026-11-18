@@ -9,10 +9,16 @@ IF DB_ID('budgets') IS NULL CREATE DATABASE budgets;
 IF DB_ID('budgets_test') IS NULL CREATE DATABASE budgets_test;
 GO
 
+-- If a login already exists, its password is set again from .env, so changing a
+-- password in .env only needs another `docker compose up`.
 IF SUSER_ID('subscriptions_user') IS NULL
     CREATE LOGIN subscriptions_user WITH PASSWORD = '$(SUBSCRIPTIONS_DB_PASSWORD)', CHECK_POLICY = OFF;
+ELSE
+    ALTER LOGIN subscriptions_user WITH PASSWORD = '$(SUBSCRIPTIONS_DB_PASSWORD)';
 IF SUSER_ID('budgets_user') IS NULL
     CREATE LOGIN budgets_user WITH PASSWORD = '$(BUDGETS_DB_PASSWORD)', CHECK_POLICY = OFF;
+ELSE
+    ALTER LOGIN budgets_user WITH PASSWORD = '$(BUDGETS_DB_PASSWORD)';
 GO
 
 -- Each login becomes a user in ITS OWN databases only, with the rights to read, write

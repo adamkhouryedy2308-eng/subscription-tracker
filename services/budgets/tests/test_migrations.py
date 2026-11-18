@@ -10,7 +10,7 @@ def applied_versions():
 
 
 def test_the_real_migrations_are_recorded_once():
-    assert "001_init.sql" in applied_versions()
+    assert applied_versions() == ["001_init.sql", "002_health_check.sql"]
 
 
 def test_a_second_start_applies_nothing():

@@ -15,12 +15,16 @@ ALERTS_UNAVAILABLE = ("Alerts are unavailable right now because the Subscription
                       "is not answering. Try again in a minute.")
 
 
+# Endpoints anyone may call without logging in. Every other one needs a token.
+PUBLIC_ENDPOINTS = ["health"]
+
+
 @bp.before_app_request
 def require_login():
     """Runs before every request: check the token's stamp, or answer 401 (not logged in)."""
     g.token = auth.token_from_request()
     g.user_id = auth.read_token(g.token) if g.token else None
-    if g.user_id is None:
+    if g.user_id is None and request.endpoint not in PUBLIC_ENDPOINTS:
         return jsonify(error="Log in first."), 401
 
 
