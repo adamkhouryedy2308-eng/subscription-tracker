@@ -19,6 +19,8 @@ def require_login():
     user_id = auth.user_id_from_request()
     if user_id is not None:
         g.user = service.get_user(user_id)
+    if request.method == "OPTIONS":   # the browser's CORS question carries no token
+        return None
     if g.user is None and request.endpoint not in PUBLIC_ENDPOINTS:
         return jsonify(error="Log in first."), 401
 

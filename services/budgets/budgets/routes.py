@@ -24,6 +24,8 @@ def require_login():
     """Runs before every request: check the token's stamp, or answer 401 (not logged in)."""
     g.token = auth.token_from_request()
     g.user_id = auth.read_token(g.token) if g.token else None
+    if request.method == "OPTIONS":   # the browser's CORS question carries no token
+        return None
     if g.user_id is None and request.endpoint not in PUBLIC_ENDPOINTS:
         return jsonify(error="Log in first."), 401
 

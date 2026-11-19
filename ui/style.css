@@ -1179,3 +1179,22 @@ select:focus {
     padding: 28px 20px;
   }
 }
+
+/* ---------- Assignment 2: messages from the static pages ---------- */
+/* "Starting up" or "not answering": a service is asleep, waking up, or stopped. */
+.notice.warning {
+  background: var(--warning-soft);
+  color: var(--warning);
+}
+
+.notice .button {
+  margin-left: auto;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+/* Shown while a page waits for the services' first answer. */
+.loading {
+  color: var(--muted);
+  padding: 32px 0;
+}
