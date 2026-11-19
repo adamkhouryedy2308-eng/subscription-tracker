@@ -1,0 +1,12 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>SubTrack</title>
+  <!-- The front door: logged in -> your subscriptions, otherwise -> the login page. -->
+  <script>
+    window.location.replace(localStorage.getItem("subtrack_token") ? "subscriptions.html" : "login.html");
+  </script>
+</head>
+<body></body>
+</html>

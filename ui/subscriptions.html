@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Subscriptions · SubTrack</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="config.js" defer></script>
+  <script src="js/api.js" defer></script>
+  <script src="js/subscriptions.js" defer></script>
+</head>
+<body>
+  <div class="shell">
+    <aside class="sidebar" id="sidebar"></aside>
+    <main class="content">
+      <header class="page-head">
+        <div>
+          <h1 id="title">Subscriptions</h1>
+          <p class="subtitle" id="subtitle">Everything you pay for regularly, in one place.</p>
+        </div>
+        <a class="button" href="subscription.html">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
+          Add subscription
+        </a>
+      </header>
+      <div id="messages"></div>
+      <div id="page"><p class="loading">Loading…</p></div>
+    </main>
+  </div>
+</body>
+</html>

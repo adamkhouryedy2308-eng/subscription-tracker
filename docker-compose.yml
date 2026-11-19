@@ -2,7 +2,8 @@ name: subtrack
 
 # The whole system on one laptop: `docker compose up --build`.
 # Passwords and the secret key come from .env (git-ignored), never from this file.
-# Ports on this laptop: Subscriptions http://localhost:8001, Budgets http://localhost:8002.
+# Open the website at http://localhost:8080
+# (the services themselves: Subscriptions http://localhost:8001, Budgets http://localhost:8002).
 services:
   sqlserver:
     image: mcr.microsoft.com/mssql/server:2022-latest
@@ -48,6 +49,7 @@ services:
       # Its OWN database, with its OWN login. "sqlserver" is the database container's name.
       DATABASE_URL: mssql://subscriptions_user:${SUBSCRIPTIONS_DB_PASSWORD}@sqlserver:1433/subscriptions
       SECRET_KEY: ${SECRET_KEY}                     # stamps login tokens
+      CORS_ORIGINS: http://localhost:8080           # only the UI's pages may call it from a browser
     ports:
       - "8001:8000"                                 # laptop port 8001 -> container port 8000
 
@@ -61,8 +63,18 @@ services:
       DATABASE_URL: mssql://budgets_user:${BUDGETS_DB_PASSWORD}@sqlserver:1433/budgets
       SECRET_KEY: ${SECRET_KEY}                     # the same key, to check the tokens' stamp
       SUBSCRIPTIONS_URL: http://subscriptions:8000  # how Budgets finds Subscriptions (no hardcoded host)
+      CORS_ORIGINS: http://localhost:8080
     ports:
       - "8002:8000"
+
+  # The website: a stock web server that serves the ui/ folder as it is (no Dockerfile).
+  # It is not a service container. Open http://localhost:8080
+  ui:
+    image: nginx:alpine
+    volumes:
+      - ./ui:/usr/share/nginx/html:ro                # ro = read-only: nginx can show the files, not change them
+    ports:
+      - "8080:80"
 
 volumes:
   sqldata:

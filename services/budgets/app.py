@@ -4,6 +4,7 @@ import time
 from datetime import date
 
 from flask import Flask, g, jsonify, request
+from flask_cors import CORS
 from flask.json.provider import DefaultJSONProvider
 
 import db
@@ -28,11 +29,24 @@ def get_secret_key():
     return key
 
 
+def cors_origins():
+    """The web addresses whose pages may call this service from the browser (CORS).
+
+    CORS_ORIGINS holds them separated by commas, e.g. "http://localhost:8080".
+    If it is not set, no other address is allowed.
+    """
+    return [origin.strip() for origin in os.environ.get("CORS_ORIGINS", "").split(",") if origin.strip()]
+
+
 def create_app():
     """Build the Flask app and bring the database up to date (migrations) before serving."""
     app = Flask(__name__)
     app.json = JSONWithDates(app)
     app.config["SECRET_KEY"] = get_secret_key()
+    # The UI's pages live at another address, so the browser asks this service first
+    # ("may this page call you?"). Only the UI's address is allowed, and it may send
+    # the Content-Type (JSON) and Authorization (token) headers.
+    CORS(app, origins=cors_origins(), allow_headers=["Content-Type", "Authorization"])
 
     db.run_migrations()
 
