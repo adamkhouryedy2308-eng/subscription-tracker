@@ -1,0 +1,437 @@
+openapi: 3.0.3
+info:
+  title: SubTrack Subscriptions service
+  version: "2.0"
+  description: |
+    Accounts, subscriptions, price history and bank import. Every answer is JSON.
+    Log in with POST /login and send the token as "Authorization: Bearer <token>".
+    Every endpoint needs the token except POST /register, POST /login and GET /health.
+    Money is in cents (1299 = 12.99 euros) and dates are text like "2026-01-15".
+
+security:
+  - bearerToken: []
+
+paths:
+  /health:
+    get:
+      summary: Is this service working? It writes to and reads from its own database.
+      security: []
+      responses:
+        "200":
+          description: The service can use its own database.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Health" }
+        "503":
+          description: The service cannot use its own database.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Health" }
+
+  /register:
+    post:
+      summary: Create an account and log in straight away.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email: { type: string, example: "ana@example.com" }
+                password: { type: string, description: "At least 8 characters." }
+                confirm_password: { type: string, description: "The password again." }
+      responses:
+        "201":
+          description: Account created; here is the login token.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Token" }
+        "400":
+          $ref: "#/components/responses/FormErrors"
+
+  /login:
+    post:
+      summary: Check email and password and give back a login token (valid 7 days).
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email: { type: string }
+                password: { type: string }
+      responses:
+        "200":
+          description: Logged in.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Token" }
+        "401":
+          $ref: "#/components/responses/Error"
+
+  /me:
+    get:
+      summary: Who is logged in.
+      responses:
+        "200":
+          description: The logged-in user.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [id, email]
+                properties:
+                  id: { type: integer }
+                  email: { type: string }
+        "401":
+          $ref: "#/components/responses/NotLoggedIn"
+
+  /subscriptions:
+    get:
+      summary: The totals, every active subscription and the cancelled ones.
+      responses:
+        "200":
+          description: The list page.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [subscriptions, summary, cancelled, yearly_savings_cents]
+                properties:
+                  subscriptions:
+                    type: array
+                    items: { $ref: "#/components/schemas/ActiveSubscription" }
+                  summary: { $ref: "#/components/schemas/Summary" }
+                  cancelled:
+                    type: array
+                    items: { $ref: "#/components/schemas/CancelledSubscription" }
+                  yearly_savings_cents: { type: integer }
+        "401":
+          $ref: "#/components/responses/NotLoggedIn"
+    post:
+      summary: Add a subscription.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SubscriptionForm" }
+      responses:
+        "201":
+          description: Saved.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Id" }
+        "400":
+          $ref: "#/components/responses/FormErrors"
+        "401":
+          $ref: "#/components/responses/NotLoggedIn"
+
+  /subscriptions/active:
+    get:
+      summary: "THE SEAM: the logged-in user's active subscriptions. Budgets & Alerts calls this endpoint."
+      responses:
+        "200":
+          description: Active subscriptions, with the costs and dates the budgets and alerts need.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [subscriptions]
+                properties:
+                  subscriptions:
+                    type: array
+                    items: { $ref: "#/components/schemas/ActiveSubscription" }
+        "401":
+          $ref: "#/components/responses/NotLoggedIn"
+
+  /subscriptions/options:
+    get:
+      summary: The choices for the form, the 10 categories and the 4 billing cycles.
+      responses:
+        "200":
+          description: The choices.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [categories, billing_cycles]
+                properties:
+                  categories:
+                    type: array
+                    items: { type: string }
+                  billing_cycles:
+                    type: array
+                    items: { $ref: "#/components/schemas/BillingCycle" }
+        "401":
+          $ref: "#/components/responses/NotLoggedIn"
+
+  /subscriptions/{subscription_id}:
+    parameters:
+      - $ref: "#/components/parameters/SubscriptionId"
+    get:
+      summary: One active subscription as form values, plus its price history.
+      responses:
+        "200":
+          description: The subscription, for the edit page.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [id, form, history]
+                properties:
+                  id: { type: integer }
+                  form: { $ref: "#/components/schemas/SubscriptionForm" }
+                  history:
+                    type: array
+                    items: { $ref: "#/components/schemas/PriceChange" }
+        "401":
+          $ref: "#/components/responses/NotLoggedIn"
+        "404":
+          $ref: "#/components/responses/Error"
+    put:
+      summary: Save changes to an active subscription (a new price is added to its price history).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SubscriptionForm" }
+      responses:
+        "200":
+          description: Saved.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Id" }
+        "400":
+          $ref: "#/components/responses/FormErrors"
+        "401":
+          $ref: "#/components/responses/NotLoggedIn"
+        "404":
+          $ref: "#/components/responses/Error"
+
+  /subscriptions/{subscription_id}/cancel:
+    parameters:
+      - $ref: "#/components/parameters/SubscriptionId"
+    post:
+      summary: Cancel a subscription. It is kept and marked cancelled.
+      responses:
+        "200":
+          description: Cancelled.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [id, name]
+                properties:
+                  id: { type: integer }
+                  name: { type: string }
+        "401":
+          $ref: "#/components/responses/NotLoggedIn"
+        "404":
+          $ref: "#/components/responses/Error"
+
+  /subscriptions/import:
+    post:
+      summary: Read a bank statement (CSV) and suggest the payments that repeat. Nothing is saved.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [statement]
+              properties:
+                statement:
+                  type: string
+                  format: binary
+                  description: "A .csv file with Date, Description and Amount columns (at most 1 MB)."
+      responses:
+        "200":
+          description: The suggested subscriptions.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [suggestions, payment_count, skipped]
+                properties:
+                  suggestions:
+                    type: array
+                    items: { $ref: "#/components/schemas/ImportSuggestion" }
+                  payment_count: { type: integer }
+                  skipped: { type: integer }
+        "400":
+          $ref: "#/components/responses/FormErrors"
+        "401":
+          $ref: "#/components/responses/NotLoggedIn"
+        "413":
+          $ref: "#/components/responses/FormErrors"
+
+  /subscriptions/import/confirm:
+    post:
+      summary: Add the suggestions the user ticked. Each one is checked like the add form.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [items]
+              properties:
+                items:
+                  type: array
+                  items: { $ref: "#/components/schemas/SubscriptionForm" }
+      responses:
+        "200":
+          description: How many were added (invalid items are skipped).
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [added]
+                properties:
+                  added: { type: integer }
+        "401":
+          $ref: "#/components/responses/NotLoggedIn"
+
+components:
+  securitySchemes:
+    bearerToken:
+      type: http
+      scheme: bearer
+      description: The token from POST /login or POST /register.
+
+  parameters:
+    SubscriptionId:
+      name: subscription_id
+      in: path
+      required: true
+      schema: { type: integer }
+
+  responses:
+    Error:
+      description: Something went wrong; the message says what.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    NotLoggedIn:
+      description: No valid login token.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    FormErrors:
+      description: The data was not valid; one message per problem.
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [errors]
+            properties:
+              errors:
+                type: array
+                items: { type: string }
+
+  schemas:
+    Health:
+      type: object
+      required: [status, db, version]
+      properties:
+        status: { type: string, enum: [ok, error] }
+        db: { type: string, enum: [ok, unavailable] }
+        version: { type: string, description: "The Git commit the image was built from, or dev." }
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error: { type: string }
+    Token:
+      type: object
+      required: [token]
+      properties:
+        token: { type: string }
+    Id:
+      type: object
+      required: [id]
+      properties:
+        id: { type: integer }
+    BillingCycle:
+      type: string
+      enum: [weekly, monthly, quarterly, yearly]
+    SubscriptionForm:
+      type: object
+      description: The add and edit form. Values are text, as typed by the user.
+      properties:
+        name: { type: string, example: "Netflix" }
+        category: { type: string, example: "Entertainment" }
+        price: { type: string, example: "12.99" }
+        billing_cycle: { $ref: "#/components/schemas/BillingCycle" }
+        first_payment_date: { type: string, format: date }
+        is_trial: { type: string, description: '"on" if it is a free trial, otherwise empty.' }
+        last_used_date: { type: string, description: "A date, or empty if unknown." }
+    PriceChange:
+      type: object
+      required: [old_price_cents, new_price_cents, changed_date, percent]
+      properties:
+        old_price_cents: { type: integer }
+        new_price_cents: { type: integer }
+        changed_date: { type: string, format: date }
+        percent: { type: integer }
+    ActiveSubscription:
+      type: object
+      required: [id, name, category, price_cents, billing_cycle, monthly_cost_cents, yearly_cost_cents,
+                 first_payment_date, next_payment_date, days_until_payment, is_trial, last_used_date,
+                 original_price_cents, price_change_percent, last_price_change]
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        category: { type: string }
+        price_cents: { type: integer }
+        billing_cycle: { $ref: "#/components/schemas/BillingCycle" }
+        monthly_cost_cents: { type: integer }
+        yearly_cost_cents: { type: integer }
+        first_payment_date: { type: string, format: date }
+        next_payment_date: { type: string, format: date }
+        days_until_payment: { type: integer }
+        is_trial: { type: boolean }
+        last_used_date: { type: string, format: date, nullable: true }
+        original_price_cents: { type: integer }
+        price_change_percent: { type: integer }
+        last_price_change:
+          allOf:
+            - $ref: "#/components/schemas/PriceChange"
+          nullable: true
+    CancelledSubscription:
+      type: object
+      required: [id, name, category, cancelled_date, yearly_saving_cents]
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        category: { type: string }
+        cancelled_date: { type: string, format: date }
+        yearly_saving_cents: { type: integer }
+    Summary:
+      type: object
+      required: [count, monthly_total_cents, yearly_total_cents, next_up]
+      properties:
+        count: { type: integer }
+        monthly_total_cents: { type: integer }
+        yearly_total_cents: { type: integer }
+        next_up:
+          description: The subscription paid next, or null if there are none.
+          allOf:
+            - $ref: "#/components/schemas/ActiveSubscription"
+          nullable: true
+    ImportSuggestion:
+      type: object
+      required: [name, category, amount_cents, billing_cycle, count, last_payment_date, bank_text, already_tracked]
+      properties:
+        name: { type: string }
+        category: { type: string }
+        amount_cents: { type: integer }
+        billing_cycle: { $ref: "#/components/schemas/BillingCycle" }
+        count: { type: integer, description: How many times it was paid. }
+        last_payment_date: { type: string, format: date }
+        bank_text: { type: string }
+        already_tracked: { type: boolean }
