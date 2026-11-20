@@ -1,0 +1,215 @@
+openapi: 3.0.3
+info:
+  title: SubTrack Budgets & Alerts service
+  version: "2.0"
+  description: |
+    Monthly budgets per category and alerts. Every answer is JSON.
+    Send the token from the Subscriptions service's POST /login as "Authorization: Bearer <token>".
+    Every endpoint needs the token except GET /health.
+    To compare spending with budgets and to find alerts, this service calls
+    GET /subscriptions/active on the Subscriptions service (timeout 2 s).
+    Money is in cents (1299 = 12.99 euros) and dates are text like "2026-01-15".
+
+security:
+  - bearerToken: []
+
+paths:
+  /health:
+    get:
+      summary: Is this service working? It writes to and reads from its own database (not the other service's).
+      security: []
+      responses:
+        "200":
+          description: The service can use its own database.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Health" }
+        "503":
+          description: The service cannot use its own database.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Health" }
+
+  /budgets:
+    get:
+      summary: Spending per category next to each budget.
+      description: |
+        If the Subscriptions service does not answer in time, the answer is still 200, with
+        spending_available false, a message, and the saved budgets (without rows and summary).
+      responses:
+        "200":
+          description: The budgets page.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [spending_available, budgets, categories]
+                properties:
+                  spending_available:
+                    type: boolean
+                    description: False when the Subscriptions service could not be reached.
+                  message:
+                    type: string
+                    description: Only when spending_available is false.
+                  rows:
+                    type: array
+                    description: Only when spending_available is true.
+                    items: { $ref: "#/components/schemas/BudgetRow" }
+                  summary:
+                    $ref: "#/components/schemas/BudgetSummary"
+                  budgets:
+                    type: object
+                    description: "The saved budgets, as {category: monthly limit in cents}."
+                    additionalProperties: { type: integer }
+                  categories:
+                    type: array
+                    items: { type: string }
+        "401":
+          $ref: "#/components/responses/NotLoggedIn"
+    post:
+      summary: Save (or change) the monthly budget of one category. Works without the Subscriptions service.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                category: { type: string, example: "Entertainment" }
+                amount: { type: string, example: "25", description: "Between 0.01 and 10,000." }
+      responses:
+        "200":
+          description: Saved.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CategoryAnswer" }
+        "400":
+          $ref: "#/components/responses/FormErrors"
+        "401":
+          $ref: "#/components/responses/NotLoggedIn"
+
+  /budgets/remove:
+    post:
+      summary: Remove the budget of one category.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                category: { type: string }
+      responses:
+        "200":
+          description: Removed (or there was none).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CategoryAnswer" }
+        "401":
+          $ref: "#/components/responses/NotLoggedIn"
+
+  /alerts:
+    get:
+      summary: Every alert for the logged-in user, most urgent kind first.
+      responses:
+        "200":
+          description: The alerts and the day limits used to find them.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [alerts, payment_soon_days, trial_warning_days, unused_days, price_rise_days]
+                properties:
+                  alerts:
+                    type: array
+                    items: { $ref: "#/components/schemas/Alert" }
+                  payment_soon_days: { type: integer }
+                  trial_warning_days: { type: integer }
+                  unused_days: { type: integer }
+                  price_rise_days: { type: integer }
+        "401":
+          $ref: "#/components/responses/NotLoggedIn"
+        "503":
+          description: The Subscriptions service did not answer in time, so there are no alerts to show.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+components:
+  securitySchemes:
+    bearerToken:
+      type: http
+      scheme: bearer
+      description: The token from the Subscriptions service's POST /login.
+
+  responses:
+    NotLoggedIn:
+      description: No valid login token.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    FormErrors:
+      description: The data was not valid; one message per problem.
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [errors]
+            properties:
+              errors:
+                type: array
+                items: { type: string }
+
+  schemas:
+    Health:
+      type: object
+      required: [status, db, version]
+      properties:
+        status: { type: string, enum: [ok, error] }
+        db: { type: string, enum: [ok, unavailable] }
+        version: { type: string, description: "The Git commit the image was built from, or dev." }
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error: { type: string }
+    CategoryAnswer:
+      type: object
+      required: [category]
+      properties:
+        category: { type: string }
+    BudgetRow:
+      type: object
+      required: [category, count, monthly_cents, yearly_cents, share_percent, budget_cents, used_percent, status]
+      properties:
+        category: { type: string }
+        count: { type: integer }
+        monthly_cents: { type: integer }
+        yearly_cents: { type: integer }
+        share_percent: { type: integer }
+        budget_cents: { type: integer, nullable: true }
+        used_percent: { type: integer, nullable: true }
+        status: { type: string, enum: [none, ok, near, over] }
+    BudgetSummary:
+      type: object
+      required: [monthly_total_cents, yearly_total_cents, budget_total_cents, over_budget]
+      properties:
+        monthly_total_cents: { type: integer }
+        yearly_total_cents: { type: integer }
+        budget_total_cents: { type: integer }
+        over_budget:
+          type: array
+          items: { type: string }
+    Alert:
+      type: object
+      required: [kind, name, amount_cents]
+      description: Which other fields are present depends on the kind.
+      properties:
+        kind: { type: string, enum: [trial_ending, over_budget, price_rise, payment_soon, unused] }
+        name: { type: string, description: "A subscription's name, or a category for over_budget." }
+        amount_cents: { type: integer }
+        days: { type: integer }
+        limit_cents: { type: integer }
+        old_cents: { type: integer }
+        percent: { type: integer }
+        date: { type: string, format: date }

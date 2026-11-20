@@ -1,0 +1,106 @@
+# CI: check every change before it can reach main.
+# Runs on every push to a branch (not main: cd.yml runs it there), on every pull request,
+# and when cd.yml calls it on main. If any job fails, the change is not deployed.
+name: CI
+
+on:
+  push:
+    branches-ignore: [main]       # on main, cd.yml calls this workflow, so it does not run twice
+  pull_request:
+  workflow_call:                  # lets cd.yml run these same checks first
+
+permissions:
+  contents: read                  # read the code, nothing else
+
+jobs:
+  checks:
+    name: Lint and validate the system description
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - name: Install the checking tools
+        run: pip install -r requirements-ci.txt
+      - name: Lint both services and the cross-seam test (ruff)
+        run: ruff check services tests
+      - name: Check system.yaml against the professor's system.schema.json
+        run: check-jsonschema --schemafile system.schema.json system.yaml
+      - name: Check each openapi.yaml against the OpenAPI specification
+        run: openapi-spec-validator services/subscriptions/openapi.yaml services/budgets/openapi.yaml
+
+  test:
+    name: Tests, coverage and the cross-seam test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      # The test database is a SQL Server container started here and thrown away after the
+      # run. CI never touches Azure SQL. Its passwords are random, made for this run only,
+      # and masked (*** in the logs), so no password is ever written in this file.
+      - name: Make throwaway database passwords for this run
+        run: |
+          for name in SA_PASSWORD SUBSCRIPTIONS_DB_PASSWORD BUDGETS_DB_PASSWORD; do
+            value="Ci$(openssl rand -hex 16)7"
+            echo "::add-mask::$value"
+            echo "$name=$value" >> "$GITHUB_ENV"
+          done
+      - name: Start SQL Server and create the databases and logins (same as on a laptop)
+        run: docker compose run --rm db-init
+
+      - name: Install both services' dependencies
+        run: pip install -r services/subscriptions/requirements-dev.txt -r services/budgets/requirements-dev.txt
+
+      - name: Subscriptions unit tests with coverage (fails below 70%)
+        working-directory: services/subscriptions
+        env:
+          TEST_DATABASE_URL: mssql://subscriptions_user:${{ env.SUBSCRIPTIONS_DB_PASSWORD }}@localhost:1433/subscriptions_test
+        run: pytest --cov
+
+      - name: Budgets & Alerts unit tests with coverage (fails below 70%)
+        working-directory: services/budgets
+        env:
+          TEST_DATABASE_URL: mssql://budgets_user:${{ env.BUDGETS_DB_PASSWORD }}@localhost:1433/budgets_test
+        run: pytest --cov
+
+      - name: Cross-seam test (both real services, then Subscriptions stopped)
+        env:
+          SUBSCRIPTIONS_TEST_DATABASE_URL: mssql://subscriptions_user:${{ env.SUBSCRIPTIONS_DB_PASSWORD }}@localhost:1433/subscriptions_test
+          BUDGETS_TEST_DATABASE_URL: mssql://budgets_user:${{ env.BUDGETS_DB_PASSWORD }}@localhost:1433/budgets_test
+        run: pytest
+
+  build:
+    name: Build the ${{ matrix.service }} image
+    needs: [checks, test]           # only build (and push) once every check has passed
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write               # needed only on main, to push the image to GHCR
+    strategy:
+      matrix:
+        service: [subscriptions, budgets]
+    env:
+      # Only on main (when cd.yml calls this workflow) are the images pushed.
+      PUSH: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: docker/setup-buildx-action@v4
+      - name: Log in to GitHub Container Registry (main only)
+        if: env.PUSH == 'true'
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}   # a short-lived token GitHub makes for each run
+      - name: Build the image (and push it on main), tagged with the commit SHA
+        uses: docker/build-push-action@v7
+        with:
+          context: services/${{ matrix.service }}
+          build-args: GIT_SHA=${{ github.sha }}
+          tags: ghcr.io/${{ github.repository_owner }}/subtrack-${{ matrix.service }}:${{ github.sha }}
+          push: ${{ env.PUSH == 'true' }}
+          provenance: false         # a plain image that Azure Container Apps can pull

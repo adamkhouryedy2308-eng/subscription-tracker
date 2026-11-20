@@ -1,0 +1,62 @@
+# yaml-language-server: $schema=./system.schema.json
+# The whole system in one file: every service, its settings, its call across the seam
+# and its Azure resources. CI checks this file against system.schema.json (the professor's).
+student: akhoury.ieu2024
+prefix: akhoury-ieu2024
+# The UI's storage static website: the public address of the whole system.
+public_url: https://akhouryieu2024ui.z33.web.core.windows.net
+
+ui:
+  path: ui
+  storage_account: akhouryieu2024ui
+  calls: [subscriptions, budgets]
+
+azure:
+  resource_group: rg-akhoury-ieu2024
+  container_apps_environment: akhoury-ieu2024-env
+  sql_server: akhoury-ieu2024-sql-it   # Italy North: UK South did not accept new SQL servers (ADR-8)
+  registry: ghcr.io/adamkhouryedy2308-eng
+
+services:
+  subscriptions:
+    description: Accounts and login, subscriptions, price history and bank import.
+    path: services/subscriptions
+    openapi: services/subscriptions/openapi.yaml
+    port_default: 8000
+    health: /health
+    migrations: services/subscriptions/migrations
+    env:
+      PORT: { default: 8000, description: Port the service listens on }
+      DATABASE_URL: { secret: true, description: "Connection string of the subscriptions database, with the service's own login (on Azure it ends with ?encryption=require)" }
+      SECRET_KEY: { secret: true, description: Key that stamps login tokens; the same in both services }
+      CORS_ORIGINS: { default: "", description: "Web addresses (comma-separated) whose pages may call this service from a browser: the UI's address. Empty means none" }
+      GIT_SHA: { default: dev, description: "Commit the image was built from, shown by /health; set when the image is built" }
+    calls: []
+    azure:
+      container_app: akhoury-ieu2024-subscriptions
+      sql_database: akhoury-ieu2024-subscriptions-db
+
+  budgets:
+    description: Monthly budgets per category and alerts, using the active subscriptions from the subscriptions service.
+    path: services/budgets
+    openapi: services/budgets/openapi.yaml
+    port_default: 8000
+    health: /health
+    migrations: services/budgets/migrations
+    env:
+      PORT: { default: 8000, description: Port the service listens on }
+      DATABASE_URL: { secret: true, description: "Connection string of the budgets database, with the service's own login (on Azure it ends with ?encryption=require)" }
+      SECRET_KEY: { secret: true, description: Key that checks the login tokens' stamp; the same in both services }
+      CORS_ORIGINS: { default: "", description: "Web addresses (comma-separated) whose pages may call this service from a browser: the UI's address. Empty means none" }
+      GIT_SHA: { default: dev, description: "Commit the image was built from, shown by /health; set when the image is built" }
+      SUBSCRIPTIONS_URL: { default: "http://subscriptions:8000", description: Base URL of the subscriptions service }
+      SUBSCRIPTIONS_TIMEOUT_S: { default: 2, description: Seconds to wait for the subscriptions service before giving up }
+    calls:
+      - service: subscriptions
+        url_env: SUBSCRIPTIONS_URL
+        endpoints: ["GET /subscriptions/active"]
+        timeout_s: 2
+        on_failure: "The budgets page still shows the saved budgets, with \"spending unavailable\" instead of the spending (200); the alerts page answers 503 with a clear \"alerts unavailable, try again\" message."
+    azure:
+      container_app: akhoury-ieu2024-budgets
+      sql_database: akhoury-ieu2024-budgets-db

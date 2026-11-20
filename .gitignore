@@ -26,3 +26,6 @@ htmlcov/
 
 # Editor settings (VS Code)
 .vscode/
+
+# Linter cache
+.ruff_cache/

@@ -4,8 +4,8 @@ import time
 from datetime import date
 
 from flask import Flask, g, jsonify, request
-from flask_cors import CORS
 from flask.json.provider import DefaultJSONProvider
+from flask_cors import CORS
 
 import db
 from budgets.routes import bp as budgets_endpoints

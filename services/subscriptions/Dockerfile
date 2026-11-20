@@ -28,10 +28,12 @@ ENV GIT_SHA=$GIT_SHA
 RUN useradd --system --no-create-home appuser
 USER appuser
 
+# The port to listen on. gunicorn reads PORT by itself (0.0.0.0:$PORT), like app.py does.
+ENV PORT=8000
 EXPOSE 8000
 
 # gunicorn is a production web server (Flask's own server is only for development).
 # --preload: build the app (and run the migrations) once, before serving any request.
 # 1 worker with 4 threads: up to 4 requests at the same time in one process.
 # --no-control-socket: we do not use gunicorn's remote-control feature (it needs a home folder).
-CMD ["gunicorn", "--bind", "0.0.0.0:8000", "--preload", "--workers", "1", "--threads", "4", "--no-control-socket", "app:create_app()"]
+CMD ["gunicorn", "--preload", "--workers", "1", "--threads", "4", "--no-control-socket", "app:create_app()"]

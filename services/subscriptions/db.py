@@ -5,7 +5,7 @@ open or close connections themselves.
 """
 import os
 import time
-from urllib.parse import unquote, urlparse
+from urllib.parse import parse_qs, unquote, urlparse
 
 import pymssql
 
@@ -15,9 +15,15 @@ MIGRATIONS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "migra
 def connect():
     """Open a connection using DATABASE_URL, e.g. mssql://user:password@localhost:1433/subscriptions.
 
+    Azure SQL only accepts encrypted connections, so on Azure the URL ends with
+    ?encryption=require. Locally there is no ?encryption and the driver's default is used.
     Rows come back as dicts, so columns are read by name: row["email"].
     """
     url = urlparse(os.environ["DATABASE_URL"])
+    options = {}
+    encryption = parse_qs(url.query).get("encryption")
+    if encryption:
+        options["encryption"] = encryption[0]
     return pymssql.connect(
         server=url.hostname,
         port=url.port or 1433,
@@ -27,6 +33,7 @@ def connect():
         login_timeout=5,
         timeout=10,
         as_dict=True,
+        **options,
     )
 
 

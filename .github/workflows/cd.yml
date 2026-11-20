@@ -1,0 +1,128 @@
+# CD: every push to main (a merged pull request) is checked and then deployed to Azure.
+# 1. ci.yml runs first (lint, tests, coverage, builds) and pushes both images to GHCR,
+#    tagged with this commit's SHA. If anything fails, nothing is deployed.
+# 2. The deploy job signs in to Azure WITHOUT a password (OIDC: Azure trusts GitHub's
+#    signed token for this repository's main branch), points each Container App at its
+#    new image with its settings and secrets, uploads the UI, and waits for /health.
+name: CD
+
+on:
+  push:
+    branches: [main]
+
+# Never run two deployments at the same time; a newer one waits for the older one.
+concurrency:
+  group: deploy-azure
+  cancel-in-progress: false
+
+jobs:
+  ci:
+    name: CI
+    uses: ./.github/workflows/ci.yml
+    permissions:
+      contents: read
+      packages: write                 # lets ci.yml push the images to GHCR
+
+  deploy:
+    name: Deploy to Azure
+    needs: ci                         # only if every CI job passed on this same commit
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write                 # lets this job ask GitHub for the signed token Azure checks
+    env:
+      RG: ${{ vars.RESOURCE_GROUP }}
+      PREFIX: ${{ vars.PREFIX }}
+      UI_STORAGE: ${{ vars.UI_STORAGE }}
+      SQL_HOST: ${{ vars.SQL_SERVER }}.database.windows.net
+      IMAGES: ghcr.io/${{ github.repository_owner }}/subtrack
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Sign in to Azure (OIDC, no password stored anywhere)
+        uses: azure/login@v3
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Look up the services' and the UI's addresses
+        run: |
+          az config set extension.use_dynamic_install=yes_without_prompt
+          subscriptions=$(az containerapp show --name "$PREFIX-subscriptions" --resource-group "$RG" --query properties.configuration.ingress.fqdn -o tsv)
+          budgets=$(az containerapp show --name "$PREFIX-budgets" --resource-group "$RG" --query properties.configuration.ingress.fqdn -o tsv)
+          ui=$(az storage account show --name "$UI_STORAGE" --resource-group "$RG" --query primaryEndpoints.web -o tsv)
+          echo "SUBSCRIPTIONS_URL=https://$subscriptions" >> "$GITHUB_ENV"
+          echo "BUDGETS_URL=https://$budgets" >> "$GITHUB_ENV"
+          echo "UI_ORIGIN=${ui%/}" >> "$GITHUB_ENV"         # the UI's address without the last "/"
+
+      # Secrets go into Container Apps as SECRETS (secretref:), never as plain variables.
+      # Each service gets the connection string of ITS OWN database with ITS OWN login.
+      - name: Deploy the Subscriptions service
+        env:
+          DB_PASSWORD: ${{ secrets.SUBSCRIPTIONS_DB_PASSWORD }}
+          SECRET_KEY: ${{ secrets.SECRET_KEY }}
+        run: |
+          app="$PREFIX-subscriptions"
+          az containerapp secret set --name "$app" --resource-group "$RG" --secrets \
+            "database-url=mssql://subscriptions_user:$DB_PASSWORD@$SQL_HOST:1433/$PREFIX-subscriptions-db?encryption=require" \
+            "secret-key=$SECRET_KEY" --output none
+          az containerapp update --name "$app" --resource-group "$RG" \
+            --image "$IMAGES-subscriptions:$GITHUB_SHA" \
+            --min-replicas 0 --max-replicas 1 \
+            --set-env-vars DATABASE_URL=secretref:database-url SECRET_KEY=secretref:secret-key \
+                           "CORS_ORIGINS=$UI_ORIGIN" \
+            --output none
+
+      - name: Deploy the Budgets & Alerts service
+        env:
+          DB_PASSWORD: ${{ secrets.BUDGETS_DB_PASSWORD }}
+          SECRET_KEY: ${{ secrets.SECRET_KEY }}
+        run: |
+          app="$PREFIX-budgets"
+          az containerapp secret set --name "$app" --resource-group "$RG" --secrets \
+            "database-url=mssql://budgets_user:$DB_PASSWORD@$SQL_HOST:1433/$PREFIX-budgets-db?encryption=require" \
+            "secret-key=$SECRET_KEY" --output none
+          az containerapp update --name "$app" --resource-group "$RG" \
+            --image "$IMAGES-budgets:$GITHUB_SHA" \
+            --min-replicas 0 --max-replicas 1 \
+            --set-env-vars DATABASE_URL=secretref:database-url SECRET_KEY=secretref:secret-key \
+                           "CORS_ORIGINS=$UI_ORIGIN" "SUBSCRIPTIONS_URL=$SUBSCRIPTIONS_URL" \
+            --output none
+
+      - name: Write ui/config.js with the services' Azure addresses
+        run: |
+          cat > ui/config.js <<EOF
+          // Written by the CD pipeline: where the browser finds the two services on Azure.
+          window.SUBTRACK_CONFIG = {
+            subscriptionsUrl: "$SUBSCRIPTIONS_URL",
+            budgetsUrl: "$BUDGETS_URL",
+          };
+          EOF
+          cat ui/config.js
+
+      - name: Upload the UI to the storage static website ($web)
+        run: |
+          az storage blob upload-batch --account-name "$UI_STORAGE" --auth-mode key \
+            --destination '$web' --source ui --overwrite \
+            --content-cache-control "no-cache" --output none
+
+      # The first request after idle starts the container and may wake the paused database
+      # (up to about a minute), so each service gets several minutes to answer 200 with
+      # THIS commit's SHA as its version. Otherwise the run fails.
+      - name: Wait until both services answer /health with 200 and this commit's version
+        run: |
+          for url in "$SUBSCRIPTIONS_URL" "$BUDGETS_URL"; do
+            for attempt in $(seq 1 24); do
+              body=$(curl --silent --max-time 60 "$url/health" || true)
+              if echo "$body" | jq -e --arg sha "$GITHUB_SHA" '.status == "ok" and .version == $sha' > /dev/null 2>&1; then
+                echo "OK  $url/health -> $body"
+                continue 2
+              fi
+              echo "not ready yet ($attempt/24): $url/health -> ${body:-no answer}"
+              sleep 15
+            done
+            echo "::error::$url/health never answered 200 with version $GITHUB_SHA"
+            exit 1
+          done
+          echo "Live: $UI_ORIGIN"
