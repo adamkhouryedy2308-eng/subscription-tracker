@@ -3,8 +3,8 @@
 # and its Azure resources. CI checks this file against system.schema.json (the professor's).
 student: akhoury.ieu2024
 prefix: akhoury-ieu2024
-# The UI's storage static website: the system's public address (filled in after the Azure setup).
-public_url: https://akhouryieu2024ui.web.core.windows.net
+# The UI's storage static website: the public address of the whole system.
+public_url: https://akhouryieu2024ui.z33.web.core.windows.net
 
 ui:
   path: ui
@@ -14,7 +14,7 @@ ui:
 azure:
   resource_group: rg-akhoury-ieu2024
   container_apps_environment: akhoury-ieu2024-env
-  sql_server: akhoury-ieu2024-sql
+  sql_server: akhoury-ieu2024-sql-it   # Italy North: UK South did not accept new SQL servers (ADR-8)
   registry: ghcr.io/adamkhouryedy2308-eng
 
 services:
