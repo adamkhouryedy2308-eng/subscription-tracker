@@ -1,0 +1,12 @@
+# The linter's rules for the whole repository (CI runs `ruff check services tests`).
+# E = style errors (pycodestyle), F = likely bugs such as unused imports or names (pyflakes),
+# I = imports sorted in the standard order.
+line-length = 120
+target-version = "py312"
+
+[lint]
+select = ["E", "F", "I"]
+
+[lint.isort]
+# Our own top-level modules, so they are sorted after Flask and other installed packages.
+known-first-party = ["accounts", "auth", "budgets", "db", "subscriptions", "subscriptions_client", "app", "tests"]
