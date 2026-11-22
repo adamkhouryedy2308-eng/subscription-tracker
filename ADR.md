@@ -26,7 +26,7 @@ Consequences: Each domain can move into its own service together with its tables
 
 ## 4. Testing approach: unit tests on the rules first, page tests for flows and security
 Date: 2026-10-04
-Status: Decided
+Status: Superseded by 9
 Context: The brief asks for at least 70% coverage of the core business logic of both domains. That logic (costs per billing cycle, next payment dates, budget status, alert rules, recurring-payment detection) is where a mistake would show users wrong amounts or dates.
 Decision: Most tests are fast unit tests of the service functions such as `next_payment_date`, `build_report`, `build_alerts` and `find_recurring`, using plain dictionaries and fixed dates, and page tests with Flask's test client and a temporary SQLite file per test cover each flow and the security rules (login required, another user's data returns 404, GET never changes data). Coverage is measured with `pytest --cov=subscriptions --cov=budgets --cov=accounts --cov=db`.
 Alternatives considered: Browser end-to-end tests with a tool like Selenium were rejected because they are slow and need a browser driver installed, which breaks the one-command setup. Mocking the database was rejected because a real temporary SQLite file also tests the SQL itself and is still fast (170 tests in under 10 seconds).
