@@ -61,7 +61,8 @@ function drawReportRow(row) {
     if (row.status === "near") label = "close to the limit";
     progress = `
       <div class="bar"><span class="bar-fill status-${row.status}" style="width: ${Math.min(row.used_percent, 100)}%"></span></div>
-      <span class="bar-label ${row.status}">${row.used_percent}% of ${euros(row.budget_cents)} · ${label}</span>`;
+      <span class="bar-label ${row.status}">${row.used_percent}% of ${euros(row.budget_cents)} · ${label}</span>
+      <span class="muted date">Warns at ${row.warn_percent}%</span>`;
   } else {
     progress = `
       <div class="bar"><span class="bar-fill" style="width: ${row.share_percent}%"></span></div>
@@ -143,9 +144,14 @@ function drawBudgetForm() {
           <label for="amount">Budget per month</label>
           <div class="money"><span>€</span><input id="amount" name="amount" inputmode="decimal" placeholder="25" required></div>
         </div>
+        <div class="field">
+          <label for="warn_percent">Warn me at</label>
+          <div class="money percent"><input id="warn_percent" name="warn_percent" inputmode="numeric" value="80" required><span>%</span></div>
+        </div>
         <button type="submit" class="button">Save budget</button>
       </form>
-      <small class="muted wide">A category can have one budget. Saving it again replaces the old amount.</small>
+      <small class="muted wide">A category can have one budget. Saving it again replaces the old amount and warning level.
+        "Warn me at 80%" shows the category as close to the limit once you use 80% of its budget.</small>
     </section>`;
 }
 
@@ -153,7 +159,11 @@ function drawBudgetForm() {
 async function saveBudget(event) {
   event.preventDefault();
   const fields = event.target.elements;
-  const values = { category: fields["category"].value, amount: fields["amount"].value };
+  const values = {
+    category: fields["category"].value,
+    amount: fields["amount"].value,
+    warn_percent: fields["warn_percent"].value,
+  };
   await changeBudget("/budgets", values, `Budget for <strong>${escapeHtml(values.category)}</strong> saved.`);
 }
 

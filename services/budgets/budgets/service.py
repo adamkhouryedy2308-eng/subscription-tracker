@@ -16,7 +16,7 @@ CATEGORIES = [
     "Other",
 ]
 
-NEAR_LIMIT_PERCENT = 80  # from 80% of a budget, the category is shown as "close to the limit"
+NEAR_LIMIT_PERCENT = 80  # the usual warning level: from 80% of a budget, "close to the limit"
 MAX_BUDGET_CENTS = 1000000  # 10,000 euros
 
 
@@ -45,12 +45,24 @@ def validate_budget(form):
     return category, cents, errors
 
 
+def validate_warn_percent(form):
+    """Check the "warn me at" field. Empty or missing means the usual 80%. Return (percent, errors)."""
+    text = str(form.get("warn_percent", "")).strip()
+    if text == "":
+        return NEAR_LIMIT_PERCENT, []
+    if not text.isdigit() or not 1 <= int(text) <= 100:
+        return None, ["Warning level must be a whole number from 1 to 100."]
+    return int(text), []
+
+
 def set_budget(user_id, form):
-    """Validate the form and save the budget. Return the errors."""
+    """Validate the form and save the budget with its warning level. Return the errors."""
     category, cents, errors = validate_budget(form)
+    warn_percent, warn_errors = validate_warn_percent(form)
+    errors += warn_errors
     if errors:
         return errors
-    repository.set_budget(user_id, category, cents)
+    repository.set_budget(user_id, category, cents, warn_percent)
     return []
 
 
@@ -89,23 +101,26 @@ def monthly_cost(row):
     return row["monthly_cents"]
 
 
-def budget_status(spent_cents, budget_cents):
-    """'none' without a budget, then 'over', 'near' (80% or more) or 'ok'."""
+def budget_status(spent_cents, budget_cents, warn_percent=NEAR_LIMIT_PERCENT):
+    """'none' without a budget, then 'over', 'near' (warn_percent or more, 80% unless set) or 'ok'."""
     if budget_cents is None:
         return "none"
     if spent_cents > budget_cents:
         return "over"
-    if spent_cents * 100 >= budget_cents * NEAR_LIMIT_PERCENT:
+    if spent_cents * 100 >= budget_cents * warn_percent:
         return "near"
     return "ok"
 
 
-def build_report(subscriptions, budgets):
+def build_report(subscriptions, budgets, warn_percents=None):
     """One row per category that has spending or a budget, most expensive first.
 
     Each row says what the category costs, its budget, how much of the budget
-    is used and its status, so the page only has to show the numbers.
+    is used, at what percentage it warns and its status, so the page only has to
+    show the numbers. warn_percents is {category: percent}; a missing one means 80%.
     """
+    if warn_percents is None:
+        warn_percents = {}
     spending = spending_by_category(subscriptions)
     total_monthly = 0
     for totals in spending.values():
@@ -117,6 +132,7 @@ def build_report(subscriptions, budgets):
             continue
         totals = spending.get(category, {"monthly_cents": 0, "yearly_cents": 0, "count": 0})
         budget = budgets.get(category)
+        warn_percent = warn_percents.get(category, NEAR_LIMIT_PERCENT)
         row = {
             "category": category,
             "count": totals["count"],
@@ -125,7 +141,8 @@ def build_report(subscriptions, budgets):
             "share_percent": percent(totals["monthly_cents"], total_monthly),
             "budget_cents": budget,
             "used_percent": percent(totals["monthly_cents"], budget) if budget else None,
-            "status": budget_status(totals["monthly_cents"], budget),
+            "warn_percent": warn_percent if budget else None,
+            "status": budget_status(totals["monthly_cents"], budget, warn_percent),
         }
         rows.append(row)
     rows.sort(key=monthly_cost, reverse=True)
@@ -160,4 +177,4 @@ def get_budget_report(user_id, subscriptions):
     (subscriptions_client.py), the one way in across the seam (ADR-2, ADR-6).
     """
     budgets = repository.list_budgets(user_id)
-    return build_report(subscriptions, budgets)
+    return build_report(subscriptions, budgets, repository.list_warn_percents(user_id))
