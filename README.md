@@ -4,46 +4,259 @@ A simple web app that helps people keep track of their recurring subscriptions
 (Netflix, Spotify, gym, iCloud, …), see how much they really spend, and get
 warned before a renewal or a free trial turns into a charge.
 
-Built for **Software Development & DevOps – Individual Assignment 1**
-(Python + Flask + SQLite, single process).
+**Live on Azure: https://akhouryieu2024ui.z33.web.core.windows.net**
+(the first click after a quiet hour can take about a minute: see "Cold starts" below).
 
-## Run it
+Built for **Software Development & DevOps**. Assignment 1 was one Flask app with
+SQLite; **Assignment 2** splits it into two services, each with its own SQL Server
+database, runs it with Docker Compose, and deploys it to Azure with GitHub Actions.
 
-You need **Python 3.10 or newer**. From the project folder:
+## The system
+
+```
+ browser ── ui/ (static HTML, CSS, JavaScript) ─────────────────────────────┐
+     │                                                                      │
+     ▼ JSON + login token                                                   ▼ JSON + login token
+ Subscriptions service  ◄── GET /subscriptions/active (2 s timeout) ──  Budgets & Alerts service
+ accounts, subscriptions,                                               budgets, spending, alerts
+ price history, bank import                                                     │
+     │                                                                          │
+     ▼                                                                          ▼
+ subscriptions database (users, subscriptions, price_changes)        budgets database (budgets)
+```
+
+| Folder | What it is |
+|---|---|
+| `services/subscriptions` | Flask JSON service: accounts and login, subscriptions, price history, bank import |
+| `services/budgets` | Flask JSON service: budgets, spending per category, alerts; asks Subscriptions for the active subscriptions |
+| `services/*/migrations` | numbered SQL files, applied once and in order when the service starts |
+| `services/*/openapi.yaml` | every endpoint of the service (OpenAPI 3) |
+| `ui/` | the website: plain files, `config.js` says where the services are |
+| `tests/test_cross_seam.py` | both real services together, then Subscriptions stopped |
+| `db/init.sql` | creates the two databases and one login per service (local only) |
+| `system.yaml` | the whole system in one file, checked against the professor's `system.schema.json` |
+| `.github/workflows` | `ci.yml` (checks every change) and `cd.yml` (deploys `main` to Azure) |
+
+If Subscriptions is down, Budgets keeps working: the budgets page shows the saved
+budgets with "spending unavailable", alerts answer a clear 503, and saving a budget
+still works (ADR-6).
+
+## Run it on your laptop (Docker Compose)
+
+You need **Docker Desktop** (on an Apple-chip Mac, switch on "Use Rosetta" in its
+settings, because SQL Server has no Apple-chip image).
 
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate          # on Windows: .venv\Scripts\activate
-pip install -r requirements.txt
+cp .env.example .env          # then change every password and the secret key in .env
+docker compose up --build
+```
+
+Open **http://localhost:8080**, sign up and start adding subscriptions. Compose
+starts SQL Server, waits until it is healthy, runs `db/init.sql` once (`db-init`),
+then starts the two services, which apply their migrations, and the website:
+
+| What | Address |
+|---|---|
+| Website | http://localhost:8080 |
+| Subscriptions service | http://localhost:8001 (try http://localhost:8001/health) |
+| Budgets & Alerts service | http://localhost:8002 |
+
+To see partial failure: `docker compose stop subscriptions`, then reload the
+Budgets and Alerts pages; `docker compose start subscriptions` brings it back.
+`docker compose down` stops everything and keeps the data; `down -v` also deletes it.
+
+**To try the bank import**, open *Import from bank* and upload
+`services/subscriptions/sample_data/bank_statement_example.csv`.
+
+## Run one service on its own
+
+Each service is a normal Python program. It needs a SQL Server database (here the
+one from compose) and its settings as environment variables (all listed in
+`system.yaml`):
+
+```bash
+docker compose up -d db-init          # starts SQL Server and creates the databases and logins
+cd services/budgets
+python3 -m venv .venv && source .venv/bin/activate
+pip install -r requirements-dev.txt
+export DATABASE_URL="mssql://budgets_user:<BUDGETS_DB_PASSWORD from .env>@localhost:1433/budgets"
+export SECRET_KEY="<SECRET_KEY from .env>" PORT=8002
+export SUBSCRIPTIONS_URL=http://localhost:8001    # optional: without it, spending shows as unavailable
 python app.py
 ```
 
-Then open **http://localhost:8000**, create an account and start adding
-subscriptions.
+The Subscriptions service is the same from `services/subscriptions`, with
+`subscriptions_user`, the `subscriptions` database and `PORT=8001` (it calls no
+other service).
 
-- `python app.py` is the one command that starts the app. It listens on
-  `0.0.0.0`, so it can also be reached from outside a container later.
-- **`PORT`** sets the port (default `8000`), e.g. `PORT=8080 python app.py`.
-- **`DATA_DIR`** sets the folder for the SQLite database (default `./data`).
-- No manual setup: the tables and the key that signs the login cookie are
-  created automatically on the first start, inside `DATA_DIR`.
-- `requirements.txt` is the only manifest. It lists every package with an
-  exact version.
+## Run the tests and coverage
 
-**To try the bank import**, open *Import from bank* and upload
-`sample_data/bank_statement_example.csv`: six months of made-up payments in
-which SubTrack finds six subscriptions.
-
-## Run the tests
+The tests use their own databases (`subscriptions_test`, `budgets_test`) in the
+compose SQL Server, never the real data. Start it first with `docker compose up -d db-init`.
 
 ```bash
-pytest
-pytest --cov=subscriptions --cov=budgets --cov=accounts --cov=db --cov-report=term-missing
+cd services/subscriptions && pytest --cov     # unit and endpoint tests + coverage (fails below 70%)
+cd services/budgets && pytest --cov           # Subscriptions is replaced by a stub here
+pytest                                        # from the repository root: the cross-seam test
 ```
 
-The first command runs all 170 tests. The second also shows the test
-coverage of each file (currently 100% of the core logic; the brief asks for
-at least 70%).
+The cross-seam test starts both real services as two programs, signs up, adds a
+subscription and a budget, checks that Budgets gets the spending from Subscriptions
+over HTTP, then stops Subscriptions and checks the designed failure (ADR-9).
+
+## How deployment works
+
+```
+pull request ──► CI: lint · system.yaml + OpenAPI checks · tests + coverage ≥ 70% · cross-seam test · build images
+merge to main ─► CD: the same CI, push images to GHCR (tag = commit SHA) ─► deploy to Azure ─► wait for /health
+```
+
+- **CI** (`.github/workflows/ci.yml`) runs on every push to a branch and every pull
+  request. The tests run against a throwaway SQL Server container with random
+  passwords made for that run; CI never touches Azure.
+- **CD** (`.github/workflows/cd.yml`) runs on every push to `main`. It runs the same
+  CI first and deploys only if every job passed. It signs in to Azure **without a
+  password** (OIDC: Azure trusts GitHub's signed token for this repository's `main`
+  branch), points each Container App at its new image, gives it its settings and
+  secrets (the database password only as a Container Apps secret), writes
+  `ui/config.js` with the services' Azure addresses, uploads `ui/` to the storage
+  static website, and waits until both `/health` answer 200 **with this commit's SHA**.
+- **Migrations** run when a service starts. Each service has at most 1 replica, so
+  they never run twice at the same time (ADR-8).
+- **Cold starts:** with nobody using it, no container runs and the databases pause
+  after an hour, so it costs almost nothing. The first request after that waits for
+  the container and the database (about a minute); the services retry the database
+  connection and the website shows "starting up" and tries again.
+
+### Azure resources
+
+| Resource | Name | Region |
+|---|---|---|
+| Resource group | `rg-akhoury-ieu2024` | UK South |
+| Storage static website (the UI, the public address) | `akhouryieu2024ui` | UK South |
+| SQL server | `akhoury-ieu2024-sql-it` | Italy North (UK South refused new SQL servers, ADR-8) |
+| Serverless databases, free offer | `akhoury-ieu2024-subscriptions-db`, `akhoury-ieu2024-budgets-db` | Italy North |
+| Container Apps environment | `akhoury-ieu2024-env` | Italy North |
+| Container Apps (min 0, max 1 replica) | `akhoury-ieu2024-subscriptions`, `akhoury-ieu2024-budgets` | Italy North |
+| Managed identity for the pipeline | `akhoury-ieu2024-github` | Italy North |
+| Log Analytics workspace (the services' logs; made with the environment, free up to 5 GB a month) | `workspace-rgakhouryieu2024relf` | Italy North |
+| Images | `ghcr.io/adamkhouryedy2308-eng/subtrack-subscriptions`, `…/subtrack-budgets` | GitHub |
+
+### Reproduce the initial Azure setup (once, by hand)
+
+Done once from a laptop with `az`, `gh` and Docker, **in Bash** (type `bash` first on
+a Mac: zsh changes `$REPO:ref` in the federated credential). No password is written
+anywhere: each one is made with `openssl rand` into a shell variable, used, and
+stored only as a GitHub secret. After this, only the pipeline changes Azure.
+
+**1. Subscription and region** (Azure for Students allows five regions; check yours with `az policy assignment list`)
+
+```bash
+az login
+az account set --subscription "Azure for Students"
+PREFIX=akhoury-ieu2024
+RG=rg-$PREFIX
+LOCATION=uksouth          # resource group and UI
+SQL_LOCATION=italynorth   # SQL server: UK South refused new SQL servers
+APP_LOCATION=italynorth   # Container Apps next to their databases
+```
+
+**2. Providers and resource group**
+
+```bash
+for p in Microsoft.App Microsoft.OperationalInsights Microsoft.Sql Microsoft.Storage Microsoft.ManagedIdentity; do az provider register --namespace $p; done
+az group create --name $RG --location $LOCATION
+```
+
+**3. The UI: a storage static website**
+
+```bash
+UI_STORAGE=akhouryieu2024ui
+az storage account create --name $UI_STORAGE --resource-group $RG --location $LOCATION --sku Standard_LRS --kind StorageV2
+az storage blob service-properties update --account-name $UI_STORAGE --static-website --index-document index.html
+az storage account show --name $UI_STORAGE --resource-group $RG --query primaryEndpoints.web -o tsv   # the public address
+```
+
+**4. SQL server, two serverless databases (free offer) and one contained user per database**
+
+```bash
+SQL_SERVER=$PREFIX-sql-it
+SQL_ADMIN=subtrackadmin
+SQL_ADMIN_PASSWORD="Adm$(openssl rand -hex 16)9"
+az sql server create --name $SQL_SERVER --resource-group $RG --location $SQL_LOCATION --admin-user $SQL_ADMIN --admin-password "$SQL_ADMIN_PASSWORD"
+az sql server firewall-rule create --resource-group $RG --server $SQL_SERVER --name AllowAzureServices --start-ip-address 0.0.0.0 --end-ip-address 0.0.0.0
+for svc in subscriptions budgets; do az sql db create --resource-group $RG --server $SQL_SERVER --name $PREFIX-$svc-db --edition GeneralPurpose --compute-model Serverless --family Gen5 --min-capacity 0.5 --capacity 1 --backup-storage-redundancy Local --use-free-limit true --free-limit-exhaustion-behavior AutoPause; done
+
+# Open the firewall to this laptop only while creating the users.
+MY_IP=$(curl -s https://api.ipify.org)
+az sql server firewall-rule create --resource-group $RG --server $SQL_SERVER --name MyLaptop --start-ip-address $MY_IP --end-ip-address $MY_IP
+AZ_SUBSCRIPTIONS_DB_PASSWORD="Sub$(openssl rand -hex 16)7"
+AZ_BUDGETS_DB_PASSWORD="Bud$(openssl rand -hex 16)7"
+docker run --rm --platform linux/amd64 -e SQLCMDPASSWORD="$SQL_ADMIN_PASSWORD" mcr.microsoft.com/mssql/server:2022-latest /opt/mssql-tools18/bin/sqlcmd -S tcp:$SQL_SERVER.database.windows.net,1433 -d $PREFIX-subscriptions-db -U $SQL_ADMIN -b -l 60 -Q "CREATE USER subscriptions_user WITH PASSWORD = '$AZ_SUBSCRIPTIONS_DB_PASSWORD'; ALTER ROLE db_ddladmin ADD MEMBER subscriptions_user; ALTER ROLE db_datareader ADD MEMBER subscriptions_user; ALTER ROLE db_datawriter ADD MEMBER subscriptions_user;"
+docker run --rm --platform linux/amd64 -e SQLCMDPASSWORD="$SQL_ADMIN_PASSWORD" mcr.microsoft.com/mssql/server:2022-latest /opt/mssql-tools18/bin/sqlcmd -S tcp:$SQL_SERVER.database.windows.net,1433 -d $PREFIX-budgets-db -U $SQL_ADMIN -b -l 60 -Q "CREATE USER budgets_user WITH PASSWORD = '$AZ_BUDGETS_DB_PASSWORD'; ALTER ROLE db_ddladmin ADD MEMBER budgets_user; ALTER ROLE db_datareader ADD MEMBER budgets_user; ALTER ROLE db_datawriter ADD MEMBER budgets_user;"
+# Check: subscriptions_user can open its own database but NOT the budgets one (this must fail).
+docker run --rm --platform linux/amd64 -e SQLCMDPASSWORD="$AZ_SUBSCRIPTIONS_DB_PASSWORD" mcr.microsoft.com/mssql/server:2022-latest /opt/mssql-tools18/bin/sqlcmd -S tcp:$SQL_SERVER.database.windows.net,1433 -d $PREFIX-budgets-db -U subscriptions_user -l 60 -Q "SELECT 1"
+az sql server firewall-rule delete --resource-group $RG --server $SQL_SERVER --name MyLaptop
+```
+
+**5. Container Apps** (a placeholder image; the first deploy replaces it and sets the settings and secrets)
+
+```bash
+az containerapp env create --name $PREFIX-env --resource-group $RG --location $APP_LOCATION
+for svc in subscriptions budgets; do az containerapp create --name $PREFIX-$svc --resource-group $RG --environment $PREFIX-env --image mcr.microsoft.com/k8se/quickstart:latest --ingress external --target-port 8000 --min-replicas 0 --max-replicas 1 --cpu 0.25 --memory 0.5Gi; done
+```
+
+CORS is not set on the Container Apps ingress: each service allows the UI's address
+itself (Flask-CORS with `CORS_ORIGINS`), which CD sets.
+
+**6. The pipeline's identity: a managed identity that trusts GitHub (OIDC)**
+
+```bash
+IDENTITY=$PREFIX-github
+az identity create --name $IDENTITY --resource-group $RG --location $APP_LOCATION
+PRINCIPAL_ID=$(az identity show --name $IDENTITY --resource-group $RG --query principalId -o tsv)
+RG_ID=$(az group show --name $RG --query id -o tsv)
+az role assignment create --assignee-object-id $PRINCIPAL_ID --assignee-principal-type ServicePrincipal --role Contributor --scope $RG_ID
+# GitHub may name the repository by name or by number, so both are trusted (main branch only).
+az identity federated-credential create --name github-main --identity-name $IDENTITY --resource-group $RG --issuer https://token.actions.githubusercontent.com --audiences api://AzureADTokenExchange --subject "repo:adamkhouryedy2308-eng/subscription-tracker:ref:refs/heads/main"
+az identity federated-credential create --name github-main-ids --identity-name $IDENTITY --resource-group $RG --issuer https://token.actions.githubusercontent.com --audiences api://AzureADTokenExchange --subject "repo:adamkhouryedy2308-eng@229741132/subscription-tracker@1389213575:ref:refs/heads/main"
+```
+
+**7. GitHub secrets and variables** (passwords go straight from the shell variable into GitHub)
+
+```bash
+gh auth login
+REPO=adamkhouryedy2308-eng/subscription-tracker
+az identity show --name $IDENTITY --resource-group $RG --query clientId -o tsv | gh secret set AZURE_CLIENT_ID --repo $REPO
+az account show --query tenantId -o tsv | gh secret set AZURE_TENANT_ID --repo $REPO
+az account show --query id -o tsv | gh secret set AZURE_SUBSCRIPTION_ID --repo $REPO
+printf %s "$AZ_SUBSCRIPTIONS_DB_PASSWORD" | gh secret set SUBSCRIPTIONS_DB_PASSWORD --repo $REPO
+printf %s "$AZ_BUDGETS_DB_PASSWORD" | gh secret set BUDGETS_DB_PASSWORD --repo $REPO
+openssl rand -hex 32 | gh secret set SECRET_KEY --repo $REPO
+gh variable set PREFIX --body $PREFIX --repo $REPO
+gh variable set RESOURCE_GROUP --body $RG --repo $REPO
+gh variable set UI_STORAGE --body $UI_STORAGE --repo $REPO
+gh variable set SQL_SERVER --body $SQL_SERVER --repo $REPO
+```
+
+**8. Read access for the professors**
+
+```bash
+az role assignment create --assignee amartini@faculty.ie.edu --role Reader --scope $RG_ID
+az role assignment create --assignee bserra@faculty.ie.edu --role Reader --scope $RG_ID
+```
+
+Then merge a pull request into `main`: CD deploys both services and the UI. The
+GHCR images are public, so Azure can pull them without a password.
+
+**Looking inside an Azure database** (used for the migration evidence): make your
+own account the server's Microsoft Entra admin, then use *Query editor* in the
+portal, which asks to allow your IP for the moment (delete that firewall rule afterwards):
+
+```bash
+az sql server ad-admin create --resource-group $RG --server-name $SQL_SERVER --display-name "$(az ad signed-in-user show --query userPrincipalName -o tsv)" --object-id "$(az ad signed-in-user show --query id -o tsv)"
+az containerapp logs show --name $PREFIX-budgets --resource-group $RG --type console --tail 300 --format text   # the startup log, e.g. "applied migration ..."
+```
 
 ## The problem
 
@@ -63,7 +276,7 @@ subscriptions.
 
 ## What SubTrack does
 
-### Domain 1 – Subscriptions (`subscriptions/`)
+### Domain 1 – Subscriptions (`services/subscriptions`)
 
 - Add, edit and cancel subscriptions: name, one of 10 fixed categories (such as
   Entertainment, AI Tools, Health & Fitness), price, billing cycle (weekly,
@@ -79,72 +292,47 @@ subscriptions.
   then suggests them as subscriptions. The file and its payments are never
   stored; only the subscriptions you confirm are saved (ADR-5).
 
-### Domain 2 – Budgets & Alerts (`budgets/`)
+### Domain 2 – Budgets & Alerts (`services/budgets`)
 
 - **Spending calculator:** what each category costs per month and per year,
   and its share of the total.
-- **Budgets:** a monthly budget per category with a green, amber (80% or more)
-  or red (over) bar. Only the limits are stored; spending is worked out live
-  (ADR-3).
+- **Budgets:** a monthly budget per category with a green, amber ("close to
+  the limit") or red (over) bar. Each budget has its own warning level, 80% unless
+  the user picks another one (migration 003). Only the limits are stored; spending
+  is worked out live (ADR-3).
 - **Alerts** with a counter in the sidebar: free trial ending (7 days), over
   budget, price went up (last 30 days), payment soon (3 days) and not used for
   30 days.
 
-### Accounts (`accounts/`)
+### Accounts (inside the Subscriptions service)
 
 A supporting part, not a third feature domain: sign up, log in and log out.
-Passwords are stored only as a salted hash, every page except log in and sign
-up needs a login, and each user only sees their own data (`user_id` in
-every query, ADR-3).
-
-## How the parts fit together
-
-| Part | Owns | Talks to the others through |
-|---|---|---|
-| Subscriptions | `subscriptions`, `price_changes` tables | `get_active_subscriptions(user_id, today)`, the one public function |
-| Budgets & Alerts | `budgets` table | only calls `get_active_subscriptions()` and reads the category list; never queries the subscriptions tables (ADR-2) |
-| Accounts | `users` table | the logged-in `user_id` in the session |
-
-Each part has the same layers: `repository.py` (all SQL for its own tables),
-`service.py` (rules and calculations, no HTML) and `routes.py` (the web pages).
-`db.py` only opens connections and creates the tables each part hands in.
-Because Budgets & Alerts reads subscriptions through one function, the app can
-later be split into two services by turning that function into an HTTP call.
-
-```
-app.py            starts Flask, creates the tables, registers each part's pages
-db.py             SQLite connection (DATA_DIR) and table creation
-accounts/         users, password hashing, log in / sign up / log out
-subscriptions/    subscriptions, price history, bank import
-budgets/          budgets, spending calculator, alerts
-templates/        HTML pages (Jinja)
-static/style.css  the design, including dark mode and a phone layout
-sample_data/      a made-up bank statement to try the import
-tests/            unit and page tests (pytest)
-```
+Passwords are stored only as a salted hash. Logging in gives a signed token that
+both services check themselves with the shared `SECRET_KEY` (ADR-6), every endpoint
+except `/health`, log in and sign up needs it, and each user only sees their own
+data (`user_id` in every query, ADR-3).
 
 ## Decisions and AI use
 
-- **[ADR.md](ADR.md)** – the five architecture decisions the brief asks for
-  (framework, domains, data model, testing, and one thing not built), each
-  with its context, alternatives and consequences.
+- **[ADR.md](ADR.md)** – the architecture decisions: 1–5 from Assignment 1, and
+  6–10 for Assignment 2 (the split, data and migrations, serverless hosting on
+  Azure, pipeline and testing, and the API gateway that was not built).
 - **[AI_USAGE.md](AI_USAGE.md)** – every use of AI (Claude Code), whether it
-  was accepted or changed, and an explanation in my own words.
+  was accepted or changed, and an explanation in my own words, including the
+  workflows, Dockerfiles and Azure commands.
 
 ## How the work is organised in Git
 
-- `main` always holds working, tested code.
-- Each feature is built on its own short-lived branch and merged into `main`
-  through a pull request once all tests pass: `feature/login` (#1),
-  `feature/private-subscription` (#2), `feature/budgets` (#3),
-  `feature/alerts` (#4), `feature/price-history` (#5),
-  `feature/bank-import` (#6) and `docs/readme` for this file.
+- `main` always holds working, tested code, and since Assignment 2 everything on
+  `main` is deployed to Azure.
+- Each change is built on its own branch and reaches `main` through a pull
+  request, so CI checks it before CD deploys it (for example `refactor/split-services`,
+  `feature/docker`, `feature/ui`, `feature/ci`, `feature/budget-warn-level`).
 - Pull requests are merged with **Create a merge commit**, so every commit made
   on a branch stays in the history of `main`.
-- Until 2026-09-30 commits went straight to `main`; from the login feature on
-  (2026-10-01), every change uses its own branch.
+- The graded version is the commit tagged `submission`.
 
-## Scope decisions
+## Scope decisions (Assignment 1)
 
 After the professor's feedback (2026-09-29) that the first idea was "a bit
 simple", three upgrades were chosen, each tied to a real user problem: the
@@ -169,7 +357,7 @@ Considered and **not built**:
 - Password reset, email checks and connecting directly to a bank: each needs
   outside services or keys, which would break the one-command setup.
 
-## SMART goals
+## SMART goals (Assignment 1)
 
 1. **Specific:** A user can add a subscription and see its monthly cost. ✅
 2. **Measurable:** Unit tests cover at least **70%** of the core business logic
