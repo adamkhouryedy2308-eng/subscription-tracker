@@ -72,6 +72,19 @@ def test_going_over_budget(client, fake_subscriptions):
     assert data["summary"]["over_budget"] == ["Entertainment"]
 
 
+def test_a_budget_can_warn_earlier_than_80_percent(client, fake_subscriptions):
+    fake_subscriptions["subscriptions"] = [netflix()]          # 13.49 of a 20 euro budget = 67%
+    client.post("/budgets", json={"category": "Entertainment", "amount": "20", "warn_percent": "60"})
+    row = client.get("/budgets").get_json()["rows"][0]
+    assert (row["warn_percent"], row["status"]) == (60, "near")
+
+
+def test_a_wrong_warning_level_gives_the_error(client, fake_subscriptions):
+    response = client.post("/budgets", json={"category": "Music", "amount": "15", "warn_percent": "0"})
+    assert response.status_code == 400
+    assert response.get_json()["errors"] == ["Warning level must be a whole number from 1 to 100."]
+
+
 def test_saving_a_wrong_budget_gives_the_errors(client, fake_subscriptions):
     response = client.post("/budgets", json={"category": "Music", "amount": "lots"})
     assert response.status_code == 400

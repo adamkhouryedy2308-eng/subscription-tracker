@@ -682,7 +682,7 @@ svg {
 
 .budget-fields {
   display: grid;
-  grid-template-columns: 1.4fr 1fr auto;
+  grid-template-columns: 1.4fr 1fr 0.8fr auto;
   gap: 16px;
   align-items: end;
 }
@@ -958,6 +958,17 @@ select:focus {
 
 .money input {
   padding-left: 30px;
+}
+
+/* The % sign of the "warn me at" field sits on the right instead. */
+.money.percent span {
+  left: auto;
+  right: 13px;
+}
+
+.money.percent input {
+  padding-left: 12px;
+  padding-right: 30px;
 }
 
 /* Billing cycle: radio buttons shown as pills */

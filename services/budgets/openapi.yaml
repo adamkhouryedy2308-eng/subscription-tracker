@@ -67,7 +67,7 @@ paths:
         "401":
           $ref: "#/components/responses/NotLoggedIn"
     post:
-      summary: Save (or change) the monthly budget of one category. Works without the Subscriptions service.
+      summary: Save (or change) the monthly budget of one category and its warning level. Works without the Subscriptions service.
       requestBody:
         required: true
         content:
@@ -77,6 +77,10 @@ paths:
               properties:
                 category: { type: string, example: "Entertainment" }
                 amount: { type: string, example: "25", description: "Between 0.01 and 10,000." }
+                warn_percent:
+                  type: string
+                  example: "80"
+                  description: "Show the category as close to the limit from this % of the budget: a whole number from 1 to 100. Empty or missing means 80."
       responses:
         "200":
           description: Saved.
@@ -180,7 +184,7 @@ components:
         category: { type: string }
     BudgetRow:
       type: object
-      required: [category, count, monthly_cents, yearly_cents, share_percent, budget_cents, used_percent, status]
+      required: [category, count, monthly_cents, yearly_cents, share_percent, budget_cents, used_percent, warn_percent, status]
       properties:
         category: { type: string }
         count: { type: integer }
@@ -189,6 +193,7 @@ components:
         share_percent: { type: integer }
         budget_cents: { type: integer, nullable: true }
         used_percent: { type: integer, nullable: true }
+        warn_percent: { type: integer, nullable: true, description: "From what % of the budget the status is near; null without a budget." }
         status: { type: string, enum: [none, ok, near, over] }
     BudgetSummary:
       type: object

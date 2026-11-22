@@ -1,4 +1,6 @@
 """Tests for the migration runner and the database connection in db.py."""
+import os
+
 import pymssql
 import pytest
 
@@ -10,7 +12,7 @@ def applied_versions():
 
 
 def test_the_real_migrations_are_recorded_once():
-    assert applied_versions() == ["001_init.sql", "002_health_check.sql"]
+    assert applied_versions() == ["001_init.sql", "002_health_check.sql", "003_budget_warn_percent.sql"]
 
 
 def test_a_second_start_applies_nothing():
@@ -31,6 +33,32 @@ def test_a_new_migration_runs_once_and_keeps_existing_rows(tmp_path, temp_db):
     finally:
         db.execute("DROP TABLE migration_test")
         db.execute("DELETE FROM schema_migrations WHERE version = '901_add_column.sql'")
+
+
+def test_migration_003_keeps_the_budgets_that_already_exist(tmp_path):
+    """What happens on Azure: budgets saved BEFORE 003 are still there after it, warning at 80%."""
+    # Go back to the database as it was before 003: only 001's budgets table, with data in it.
+    db.execute("DROP TABLE budgets")
+    db.execute("DELETE FROM schema_migrations WHERE version IN ('001_init.sql', '003_budget_warn_percent.sql')")
+    (tmp_path / "001_init.sql").write_text(open(os.path.join(db.MIGRATIONS_DIR, "001_init.sql")).read())
+    assert db.run_migrations(str(tmp_path)) == ["001_init.sql"]
+    db.execute("INSERT INTO budgets (user_id, category, monthly_limit_cents) VALUES (7, 'Music', 1500)")
+    db.execute("INSERT INTO budgets (user_id, category, monthly_limit_cents) VALUES (7, 'Education', 4000)")
+
+    # Start the service again: only 003 runs, and both rows are kept with the default 80%.
+    assert db.run_migrations() == ["003_budget_warn_percent.sql"]
+    rows = db.query("SELECT user_id, category, monthly_limit_cents, warn_percent FROM budgets ORDER BY id")
+    assert rows == [
+        {"user_id": 7, "category": "Music", "monthly_limit_cents": 1500, "warn_percent": 80},
+        {"user_id": 7, "category": "Education", "monthly_limit_cents": 4000, "warn_percent": 80},
+    ]
+    db.execute("DELETE FROM budgets")
+
+
+def test_the_database_refuses_a_warning_level_outside_1_to_100(temp_db):
+    with pytest.raises(pymssql.Error):
+        db.execute("INSERT INTO budgets (user_id, category, monthly_limit_cents, warn_percent) "
+                   "VALUES (1, 'Music', 1500, 150)")
 
 
 def test_a_failing_migration_leaves_no_trace(tmp_path):

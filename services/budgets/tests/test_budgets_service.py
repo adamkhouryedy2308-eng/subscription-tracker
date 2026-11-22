@@ -2,7 +2,7 @@ from datetime import date
 
 import pytest
 
-from budgets import service
+from budgets import repository, service
 
 TODAY = date(2026, 10, 2)
 USER_ID = 1
@@ -41,12 +41,36 @@ def test_invalid_budget_forms_give_a_clear_error(form, error):
     assert error in errors
 
 
+@pytest.mark.parametrize("form, percent", [({}, 80), ({"warn_percent": ""}, 80),
+                                           ({"warn_percent": "50"}, 50), ({"warn_percent": 100}, 100)])
+def test_warning_level_is_80_unless_the_user_picks_one(form, percent):
+    assert service.validate_warn_percent(form) == (percent, [])
+
+
+@pytest.mark.parametrize("text", ["0", "101", "-5", "12.5", "half"])
+def test_invalid_warning_levels_give_a_clear_error(text):
+    assert service.validate_warn_percent({"warn_percent": text}) == (
+        None, ["Warning level must be a whole number from 1 to 100."])
+
+
 # --- Saving budgets ----------------------------------------------------------------
 
 def test_set_budget_saves_it_and_saving_again_replaces_it(temp_db):
     assert service.set_budget(USER_ID, {"category": "Music", "amount": "15"}) == []
     assert service.set_budget(USER_ID, {"category": "Music", "amount": "20"}) == []
     assert service.list_budgets(USER_ID) == {"Music": 2000}
+
+
+def test_set_budget_saves_the_warning_level_too(temp_db):
+    service.set_budget(USER_ID, {"category": "Music", "amount": "15", "warn_percent": "50"})
+    service.set_budget(USER_ID, {"category": "Education", "amount": "40"})
+    assert repository.list_warn_percents(USER_ID) == {"Music": 50, "Education": 80}
+
+
+def test_a_bad_warning_level_saves_nothing(temp_db):
+    errors = service.set_budget(USER_ID, {"category": "Music", "amount": "15", "warn_percent": "500"})
+    assert errors == ["Warning level must be a whole number from 1 to 100."]
+    assert service.list_budgets(USER_ID) == {}
 
 
 def test_set_budget_with_errors_saves_nothing(temp_db):
@@ -81,6 +105,24 @@ def test_spending_by_category_adds_up_each_category():
 ])
 def test_budget_status(spent, budget, status):
     assert service.budget_status(spent, budget) == status
+
+
+@pytest.mark.parametrize("spent, warn_percent, status", [
+    (499, 50, "ok"),
+    (500, 50, "near"),       # a budget set to warn at 50% is close to the limit sooner
+    (899, 90, "ok"),
+    (900, 90, "near"),
+])
+def test_budget_status_uses_the_budgets_own_warning_level(spent, warn_percent, status):
+    assert service.budget_status(spent, 1000, warn_percent) == status
+
+
+def test_report_rows_show_the_warning_level_of_their_budget():
+    rows = service.build_report([sub("Music", 600), sub("Entertainment", 3000)],
+                                {"Music": 1000}, {"Music": 50})
+    entertainment, music = rows
+    assert (music["warn_percent"], music["status"]) == (50, "near")   # 60% used, warns at 50%
+    assert entertainment["warn_percent"] is None                      # no budget, so no warning level
 
 
 def test_percent():
