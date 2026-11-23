@@ -2,6 +2,7 @@
 
 The Subscriptions service is replaced by the fake_subscriptions stub (see conftest.py).
 """
+import json
 from datetime import date, timedelta
 
 import pytest
@@ -77,6 +78,12 @@ def test_a_budget_can_warn_earlier_than_80_percent(client, fake_subscriptions):
     client.post("/budgets", json={"category": "Entertainment", "amount": "20", "warn_percent": "60"})
     row = client.get("/budgets").get_json()["rows"][0]
     assert (row["warn_percent"], row["status"]) == (60, "near")
+
+
+def test_a_category_without_a_budget_has_no_warning_level(client, fake_subscriptions):
+    fake_subscriptions["subscriptions"] = [netflix()]          # spending, but no budget set
+    row = client.get("/budgets").get_json()["rows"][0]
+    assert (row["budget_cents"], row["warn_percent"], row["status"]) == (None, None, "none")
 
 
 def test_a_wrong_warning_level_gives_the_error(client, fake_subscriptions):
