@@ -79,6 +79,12 @@ def test_a_budget_can_warn_earlier_than_80_percent(client, fake_subscriptions):
     assert (row["warn_percent"], row["status"]) == (60, "near")
 
 
+def test_a_category_without_a_budget_has_no_warning_level(client, fake_subscriptions):
+    fake_subscriptions["subscriptions"] = [netflix()]          # spending, but no budget set
+    row = client.get("/budgets").get_json()["rows"][0]
+    assert (row["budget_cents"], row["warn_percent"], row["status"]) == (None, None, "none")
+
+
 def test_a_wrong_warning_level_gives_the_error(client, fake_subscriptions):
     response = client.post("/budgets", json={"category": "Music", "amount": "15", "warn_percent": "0"})
     assert response.status_code == 400
