@@ -2,7 +2,6 @@
 
 The Subscriptions service is replaced by the fake_subscriptions stub (see conftest.py).
 """
-import json
 from datetime import date, timedelta
 
 import pytest
