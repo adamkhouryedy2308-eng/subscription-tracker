@@ -29,10 +29,15 @@ def get_active_subscriptions(token):
 
     Raises SubscriptionsUnavailable if the call fails or takes longer than the timeout.
     """
-    request = Request(base_url() + "/subscriptions/active",
-                      headers={"Authorization": f"Bearer {token}"})
+    url = base_url() + "/subscriptions/active"
+    # Only web addresses: urlopen would also open file:// or other schemes, so a wrong
+    # SUBSCRIPTIONS_URL could make Budgets read a file (found by Bandit, B310).
+    if not url.startswith(("http://", "https://")):
+        raise SubscriptionsUnavailable()
+    request = Request(url, headers={"Authorization": f"Bearer {token}"})
     try:
-        with urlopen(request, timeout=timeout_seconds()) as response:
+        # Bandit B310 is silenced on the next line: the scheme is checked just above.
+        with urlopen(request, timeout=timeout_seconds()) as response:  # nosec B310
             data = json.load(response)
     except (URLError, TimeoutError, ValueError) as error:
         # URLError: no answer or an error status (e.g. 500); TimeoutError: too slow;

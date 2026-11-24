@@ -107,12 +107,13 @@ over HTTP, then stops Subscriptions and checks the designed failure (ADR-9).
 ## How deployment works
 
 ```
-pull request ──► CI: lint · system.yaml + OpenAPI checks · tests + coverage ≥ 70% · cross-seam test · build images
+pull request ──► CI: lint · SAST (Bandit) · SCA (pip-audit) · system.yaml + OpenAPI checks · tests + coverage ≥ 70% · cross-seam test · build images
 merge to main ─► CD: the same CI, push images to GHCR (tag = commit SHA) ─► deploy to Azure ─► wait for /health
 ```
 
 - **CI** (`.github/workflows/ci.yml`) runs on every push to a branch and every pull
-  request. The tests run against a throwaway SQL Server container with random
+  request. Besides lint and tests it runs two security scans: **SAST** with Bandit
+  (our own code) and **SCA** with pip-audit (the libraries we use). The tests run against a throwaway SQL Server container with random
   passwords made for that run; CI never touches Azure.
 - **CD** (`.github/workflows/cd.yml`) runs on every push to `main`. It runs the same
   CI first and deploys only if every job passed. It signs in to Azure **without a
