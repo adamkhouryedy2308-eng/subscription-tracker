@@ -1,0 +1,5 @@
+10020	FAIL	(Missing Anti-clickjacking Header: we send CSP frame-ancestors none)
+10021	FAIL	(X-Content-Type-Options Header Missing: we send nosniff)
+10035	FAIL	(Strict-Transport-Security Header Not Set: we send HSTS)
+10038	FAIL	(Content Security Policy Header Not Set: we send a CSP)
+10049	IGNORE	(Storable or Non-Storable Content: information only; we send no-store on purpose)

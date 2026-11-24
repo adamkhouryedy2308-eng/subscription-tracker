@@ -126,3 +126,36 @@ jobs:
             exit 1
           done
           echo "Live: $UI_ORIGIN"
+
+      # DAST: OWASP ZAP looks at the LIVE website and both services from the outside, like a
+      # visitor would. The baseline scan is passive: it reads every answer (missing security
+      # headers, leaked versions, cookies...) but does not attack, so it is safe to run on the
+      # real system. Its findings are listed in this run's log, and the full reports are kept
+      # as an artifact ("zap-reports").
+      # - The two services: .zap/services.tsv turns the security headers we added into FAIL
+      #   rules, so if one ever goes missing, this run fails.
+      # - The website: report only. Azure Storage serves the files as they are and cannot add
+      #   security headers (that would need Azure Front Door, a monthly cost; see ADR-9).
+      - name: "DAST: scan the live website and both services (OWASP ZAP baseline)"
+        run: |
+          mkdir -p zap && cp .zap/services.tsv zap/ && chmod -R 777 zap
+          scan() {   # scan <url> <report name> [extra ZAP options]
+            echo "::group::ZAP baseline scan of $1"
+            docker run --rm -v "$PWD/zap:/zap/wrk:rw" ghcr.io/zaproxy/zaproxy:stable \
+              zap-baseline.py -t "$1" -r "$2.html" -I "${@:3}"
+            status=$?
+            echo "::endgroup::"
+            return $status
+          }
+          failed=0
+          scan "$UI_ORIGIN" website || failed=1
+          scan "$SUBSCRIPTIONS_URL" subscriptions -c services.tsv || failed=1
+          scan "$BUDGETS_URL" budgets -c services.tsv || failed=1
+          exit $failed
+
+      - name: Keep the DAST reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: zap-reports
+          path: zap/*.html

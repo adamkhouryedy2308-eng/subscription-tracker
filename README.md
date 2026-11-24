@@ -108,7 +108,7 @@ over HTTP, then stops Subscriptions and checks the designed failure (ADR-9).
 
 ```
 pull request ──► CI: lint · SAST (Bandit) · SCA (pip-audit) · system.yaml + OpenAPI checks · tests + coverage ≥ 70% · cross-seam test · build images
-merge to main ─► CD: the same CI, push images to GHCR (tag = commit SHA) ─► deploy to Azure ─► wait for /health
+merge to main ─► CD: the same CI, push images to GHCR (tag = commit SHA) ─► deploy to Azure ─► wait for /health ─► DAST (OWASP ZAP)
 ```
 
 - **CI** (`.github/workflows/ci.yml`) runs on every push to a branch and every pull
@@ -122,6 +122,9 @@ merge to main ─► CD: the same CI, push images to GHCR (tag = commit SHA) ─
   secrets (the database password only as a Container Apps secret), writes
   `ui/config.js` with the services' Azure addresses, uploads `ui/` to the storage
   static website, and waits until both `/health` answer 200 **with this commit's SHA**.
+  Then **DAST**: OWASP ZAP's baseline scan looks at the live website and both services
+  from the outside (passive, safe on the real system). The services' security headers
+  are FAIL rules in `.zap/services.tsv`, and the reports are kept with each run.
 - **Migrations** run when a service starts. Each service has at most 1 replica, so
   they never run twice at the same time (ADR-8).
 - **Cold starts:** with nobody using it, no container runs and the databases pause
