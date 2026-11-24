@@ -14,7 +14,7 @@ permissions:
 
 jobs:
   checks:
-    name: Lint and validate the system description
+    name: Lint, security scans and the system description
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -29,6 +29,12 @@ jobs:
         run: check-jsonschema --schemafile system.schema.json system.yaml
       - name: Check each openapi.yaml against the OpenAPI specification
         run: openapi-spec-validator services/subscriptions/openapi.yaml services/budgets/openapi.yaml
+
+      # Security checks (DevSecOps): they run before anything is built, like the others.
+      - name: "SAST: scan both services' code for security mistakes (Bandit)"
+        run: bandit -r services -x "*/tests/*"
+      - name: "SCA: check both services' libraries for known vulnerabilities (pip-audit)"
+        run: pip-audit -r services/subscriptions/requirements.txt -r services/budgets/requirements.txt
 
   test:
     name: Tests, coverage and the cross-seam test
