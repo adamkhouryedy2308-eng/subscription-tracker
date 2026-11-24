@@ -45,3 +45,13 @@ def test_every_request_is_logged_with_method_path_status_and_duration(guest, cap
 def test_the_log_never_contains_the_token(guest, capsys):
     guest.get("/health", headers={"Authorization": "Bearer secret-token-value"})
     assert "secret-token-value" not in capsys.readouterr().out
+
+
+def test_every_answer_has_the_security_headers(guest):
+    """Found missing by the DAST scan (OWASP ZAP): even errors carry them."""
+    for url in ["/health", "/nothing-here"]:
+        headers = guest.get(url).headers
+        assert headers["Strict-Transport-Security"] == "max-age=31536000"
+        assert headers["X-Content-Type-Options"] == "nosniff"
+        assert headers["Content-Security-Policy"] == "default-src 'none'; frame-ancestors 'none'"
+        assert headers["Cache-Control"] == "no-store"

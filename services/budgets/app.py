@@ -56,6 +56,19 @@ def create_app():
     def start_timer():
         g.started = time.perf_counter()
 
+    # Security headers on every answer (found missing by the DAST scan, OWASP ZAP).
+    # This service only answers JSON, so the browser may not guess another type (nosniff),
+    # may not put an answer inside a page (frame-ancestors), may not load anything from it
+    # (default-src 'none'), may not keep a copy of anyone's data (no-store), and must only
+    # ever use HTTPS for this address for the next year (Strict-Transport-Security, HSTS).
+    @app.after_request
+    def add_security_headers(response):
+        response.headers["Strict-Transport-Security"] = "max-age=31536000"
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["Content-Security-Policy"] = "default-src 'none'; frame-ancestors 'none'"
+        response.headers["Cache-Control"] = "no-store"
+        return response
+
     @app.after_request
     def log_request(response):
         duration_ms = (time.perf_counter() - g.get("started", time.perf_counter())) * 1000
