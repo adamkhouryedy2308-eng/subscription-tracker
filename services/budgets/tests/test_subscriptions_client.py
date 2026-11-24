@@ -78,6 +78,13 @@ def test_a_service_that_is_not_running_raises_unavailable(monkeypatch):
         subscriptions_client.get_active_subscriptions("my-token")
 
 
+def test_only_web_addresses_are_called(monkeypatch):
+    """A SUBSCRIPTIONS_URL like file:///etc/passwd must never be opened (Bandit B310)."""
+    monkeypatch.setenv("SUBSCRIPTIONS_URL", "file:///etc/passwd")
+    with pytest.raises(subscriptions_client.SubscriptionsUnavailable):
+        subscriptions_client.get_active_subscriptions("token")
+
+
 def test_a_subscription_without_a_price_change_keeps_none():
     sub = subscriptions_client.with_dates(dict(NETFLIX_AS_JSON, last_price_change=None))
     assert sub["last_price_change"] is None

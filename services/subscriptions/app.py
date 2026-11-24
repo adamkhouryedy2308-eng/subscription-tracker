@@ -98,4 +98,5 @@ def create_app():
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", "8000"))
-    create_app().run(host="0.0.0.0", port=port)
+    # Bandit B104 is silenced: in a container the service must listen on every interface.
+    create_app().run(host="0.0.0.0", port=port)  # nosec B104
